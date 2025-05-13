@@ -1,0 +1,34 @@
+[tool.poetry]
+name = "django-docker-api"
+version = "0.1.0"
+description = "Django API server with Docker"
+authors = ["Your Name <your.email@example.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.11.11"
+django = "^5.0.1"
+djangorestframework = "^3.14.0"
+psycopg2-binary = "^2.9.9"
+drf-yasg = "^1.21.7"  # Swagger APIドキュメント自動生成
+django-cors-headers = "^4.3.1"
+gunicorn = "^21.2.0"  # 本番用WSGIサーバー
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.1.0"
+isort = "^5.13.2"
+flake8 = "^7.0.0"
+pytest = "^8.0.0"
+pytest-django = "^4.7.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target-version = ['py312']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 88
