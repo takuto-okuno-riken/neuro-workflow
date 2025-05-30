@@ -42,6 +42,38 @@ const theme = extendTheme({
         letterSpacing: 'tight',
       },
     },
+    Modal: {
+      parts: ['dialog', 'header', 'body', 'footer', 'closeButton', 'overlay'],
+      baseStyle: {
+        dialog: {
+          bg: 'gray.800',
+          color: 'white',  
+          borderRadius: 'md',
+          boxShadow: 'xl',
+        },
+        overlay: {
+          bg: 'blackAlpha.700', 
+        },
+        header: {
+          fontWeight: 'bold',
+          borderBottomWidth: '1px',
+          borderColor: 'gray.700',
+        },
+        body: {
+        },
+        footer: {
+          borderTopWidth: '1px',
+          borderColor: 'gray.700',
+        },
+        closeButton: {
+          color: 'gray.400',
+          _hover: {
+            color: 'white',
+            bg: 'whiteAlpha.100',
+          }
+        }
+      }
+    }
   },
 });
 

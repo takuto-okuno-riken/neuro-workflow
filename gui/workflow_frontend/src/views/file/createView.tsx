@@ -11,16 +11,57 @@ import {
   Grid,
   GridItem,
   Divider,
+  Spinner,
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
+
+interface CreateFlowProjectRequest {
+  name: string;
+  description: string;
+}
+
+interface CreateFlowProjectResponse {
+  id?: number;
+  name?: string;
+  description?: string;
+  created_at?: string;
+  error?: string;
+}
 
 const CreateFlowPj: React.FC = () => {
   const [projectName, setProjectName] = useState<string>('');
   const [note, setNote] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const toast = useToast();
   const navigate = useNavigate();
 
-  const handleRegistration = () => {
+  const API_ENDPOINT = `http://localhost:3000/api/workflow/`;
+
+  // ワークフロー作成API呼び出し
+  const createFlowProject = async (data: CreateFlowProjectRequest): Promise<CreateFlowProjectResponse> => {
+    try {
+      const response = await fetch(API_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorData}`);
+      }
+
+      const result: CreateFlowProjectResponse = await response.json();
+      return result;
+    } catch (error) {
+      console.error('API call failed:', error);
+      throw error;
+    }
+  };
+
+  const handleRegistration = async () => {
     if (!projectName.trim()) {
       toast({
         title: 'Input Error',
@@ -31,17 +72,49 @@ const CreateFlowPj: React.FC = () => {
       });
       return;
     }
-    
-    toast({
-      title: 'Creation Success',
-      description: `${projectName} has been created`,
-      status: 'success',
-      duration: 3000,
-      isClosable: true,
-    });
-    
-    setProjectName('');
-    setNote('');
+
+    setIsLoading(true);
+
+    try {
+      // API呼び出し用のデータを準備
+      const requestData: CreateFlowProjectRequest = {
+        name: projectName.trim(),
+        description: note.trim(),
+      };
+
+      const response = await createFlowProject(requestData);
+
+      if (response.id) {
+        toast({
+          title: 'Creation Success',
+          description: `${projectName} has been created successfully`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+
+        // フォームをリセット
+        setProjectName('');
+        setNote('');
+
+        // 作成されたワークフローの詳細画面に遷移
+        navigate(`/workflow/${response.id}`);
+      } else {
+        throw new Error(response.error || 'Creation failed');
+      }
+    } catch (error) {
+      console.error('Error creating flow project:', error);
+      
+      toast({
+        title: 'Creation Failed',
+        description: error instanceof Error ? error.message : 'An unexpected error occurred',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCancel = () => {
@@ -66,6 +139,7 @@ const CreateFlowPj: React.FC = () => {
             placeholder="Project name ..."
             value={projectName}
             onChange={(e) => setProjectName(e.target.value)}
+            isDisabled={isLoading}
           />
         </FormControl>
 
@@ -77,6 +151,7 @@ const CreateFlowPj: React.FC = () => {
             rows={4}
             value={note}
             onChange={(e) => setNote(e.target.value)}
+            isDisabled={isLoading}
           />
         </FormControl>
       </VStack>
@@ -88,14 +163,15 @@ const CreateFlowPj: React.FC = () => {
             size="lg"
             width="100%"
             fontWeight="bold"
-            isDisabled={!projectName.trim()}
+            isDisabled={!projectName.trim() || isLoading}
             onClick={handleRegistration}
             boxShadow="sm"
             variant="outline"
             _hover={{ boxShadow: "md", transform: "translateY(-2px)" }}
             transition="all 0.2s"
+            leftIcon={isLoading ? <Spinner size="sm" /> : undefined}
           >
-            Create
+            {isLoading ? 'Creating...' : 'Create'}
           </Button>
         </GridItem>
         <GridItem>
@@ -106,6 +182,7 @@ const CreateFlowPj: React.FC = () => {
             width="100%"
             onClick={handleCancel}
             _hover={{ bg: "red.50" }}
+            isDisabled={isLoading}
           >
             Cancel
           </Button>
