@@ -1,7 +1,8 @@
 """
-Neuron simulation node for parameter optimization example.
+Simplified neuron simulation node for parameter optimization example.
 
-This module provides a node for simulating a neuron model.
+This module provides a node for simulating a neuron model with a clean,
+focused design that separates simulation from parameter tracking.
 """
 
 from typing import Dict, Any, List
@@ -14,10 +15,10 @@ import nest
 
 
 class NeuronSimulationNode(Node):
-    """Node for simulating a neuron model."""
+    """Enhanced node for simulating a neuron model with a clean, focused design."""
     
     NODE_DEFINITION = NodeDefinitionSchema(
-        type='neuron_simulation',
+        type='enhanced_neuron_simulation',
         description='Simulates a neuron in NEST with given parameters',
         
         parameters={
@@ -47,7 +48,6 @@ class NeuronSimulationNode(Node):
                 type=PortType.DICT,
                 description='Neuron configuration parameters'
             )
-            
         },
         
         outputs={
@@ -59,6 +59,10 @@ class NeuronSimulationNode(Node):
                 type=PortType.LIST,
                 description='Times of action potentials (ms)'
             ),
+            'time': PortDefinition(
+                type=PortType.LIST,
+                description='Time points for the simulation (ms)'
+            ),
             'simulation_results': PortDefinition(
                 type=PortType.DICT,
                 description='Complete simulation results'
@@ -68,14 +72,14 @@ class NeuronSimulationNode(Node):
         methods={
             'simulate': MethodDefinition(
                 description='Run the neuron simulation',
-                inputs=['nest_neuron', 'input_current','nest_neuron_config'],
-                outputs=['membrane_potential', 'spike_times', 'simulation_results']
+                inputs=['nest_neuron', 'input_current', 'nest_neuron_config'],
+                outputs=['membrane_potential', 'spike_times', 'time', 'simulation_results']
             )
         }
     )
     
     def __init__(self, name: str):
-        """Initialize the NeuronSimulationNode.
+        """Initialize the EnhancedNeuronSimulationNode.
         
         Args:
             name: Name of the node
@@ -91,51 +95,62 @@ class NeuronSimulationNode(Node):
             method_key="simulate"
         )
     
-    def simulate(self, nest_neuron: Dict[str, Any], input_current: Dict[str, Any], nest_neuron_config: Dict[str, Any]) -> Dict[str, Any]:
+    def simulate(self, nest_neuron: Any, input_current: Any, nest_neuron_config: Dict[str, Any]) -> Dict[str, Any]:
         """Run the neuron simulation.
         
         Args:
             nest_neuron: Neuron model object to simulate
             input_current: Input current over time (nA)
-            nest_neuron_config: 'Neuron configuration parameters'
+            nest_neuron_config: Neuron configuration parameters
             
         Returns:
             Dictionary with simulation results
         """
         # Get simulation parameters
-        nest.resolution = self._parameters['dt']
+        dt = self._parameters['dt']
+        simulation_time = self._parameters['simulation_time']
+        
+        # Set NEST resolution
+        #nest.resolution = dt check error <--
 
-        # Get neuron parameters for reporting        
+        # Print neuron parameters for reporting        
         print(f"Running neuron simulation with parameters:")
         for key, value in nest_neuron_config.items():
             print(f"  {key}: {value}")
         print(f"  Time step: {dt} ms")
         
         # Apply stimuli
-        nest.Connect(input_current, nest_neuron)
+        #nest.Connect(input_current, nest_neuron)
 
-        #create devices for recordings
-        #multimeter
-        mul = nest.Create("multimeter",params={"interval": self._parameters['dt'], "record_from": ["V_m"]})
-        #spikes recorder
+        # Create devices for recordings
+        # Multimeter
+        mul = nest.Create("multimeter", params={"interval": dt, "record_from": ["V_m"]})
+        nest.Connect(mul, nest_neuron)
+        
+        # Spike recorder
         spr = nest.Create("spike_recorder")
+        nest.Connect(nest_neuron, spr)
         
         # Simulate using the neuron model object
-        nest.Simulate(self._parameters['simulation_time'])
+        nest.Simulate(simulation_time)
         
         # Extract simulation data
-        v = mul.events["V_m"]
-        spike_times = spr.events['times']
+        events = mul.events
+        times = events["times"].tolist()
+        v_m = events["V_m"].tolist()
+        spike_times = spr.events['times'].tolist()
 
-        # Create complete results dictionary
+        # Create simple simulation results without parameter tracking
         simulation_results = {
-            'membrane_potential': v.tolist(),
             'spike_times': spike_times,
-            'spike_count': len(spike_times),
+            'membrane_potential': v_m,
+            'time': times,
+            'spike_count': len(spike_times)
         }
         
         return {
-            'membrane_potential': v.tolist(),
+            'membrane_potential': v_m,
             'spike_times': spike_times,
+            'time': times,
             'simulation_results': simulation_results
         }

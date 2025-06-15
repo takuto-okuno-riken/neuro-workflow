@@ -1,8 +1,8 @@
 """
-Stimulus generator node for neural simulations.
+Enhanced stimulus generator node for neural simulations.
 
 This module provides a node for generating various types of input stimuli
-for neural simulations.
+for neural simulations, with added support for exposing optimization metadata.
 """
 
 from typing import Dict, Any, List, Optional
@@ -15,11 +15,11 @@ import nest
 
 
 class StimulusGeneratorNode(Node):
-    """Node for generating input stimuli for neural simulations."""
+    """Enhanced node for generating input stimuli for neural simulations."""
     
     NODE_DEFINITION = NodeDefinitionSchema(
-        type='stimulus_generator',
-        description='Generates input stimuli for neural simulations',
+        type='enhanced_stimulus_generator',
+        description='Generates input stimuli for neural simulations with optimization metadata',
         
         parameters={
             'stimulus_type': ParameterDefinition(
@@ -73,6 +73,11 @@ class StimulusGeneratorNode(Node):
                 type=PortType.FLOAT,
                 description='Time step (ms)',
                 optional=True
+            ),
+            'parameters': PortDefinition(
+                type=PortType.DICT,
+                description='Parameters to configure the stimulus',
+                optional=True
             )
         },
         
@@ -81,27 +86,23 @@ class StimulusGeneratorNode(Node):
                 type=PortType.OBJECT,
                 description='Generated input current over time (nA)'
             ),
-          #  'time_array': PortDefinition(
-          #      type=PortType.LIST,
-          #      description='Time points corresponding to the input current'
-          #  ),
-          #  'stimulus_info': PortDefinition(
-          #      type=PortType.DICT,
-          #      description='Information about the generated stimulus'
-          #  )
+            'parameter_metadata': PortDefinition(
+                type=PortType.DICT,
+                description='Metadata about optimizable parameters'
+            )
         },
         
         methods={
             'generate_stimulus': MethodDefinition(
                 description='Generate a stimulus based on parameters',
-                inputs=['simulation_time', 'dt'],
-                outputs=['input_current']#, 'time_array', 'stimulus_info']
+                inputs=['simulation_time', 'dt', 'parameters'],
+                outputs=['input_current', 'parameter_metadata']
             )
         }
     )
     
     def __init__(self, name: str):
-        """Initialize the StimulusGeneratorNode.
+        """Initialize the EnhancedStimulusGeneratorNode.
         
         Args:
             name: Name of the node
@@ -117,16 +118,30 @@ class StimulusGeneratorNode(Node):
             method_key="generate_stimulus"
         )
     
-    def generate_stimulus(self, simulation_time: Dict[str, Any], dt: Dict[str, Any]) -> Dict[str, Any]:
+    def generate_stimulus(self, simulation_time: float, dt: float = 0.1, 
+                         parameters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Generate a stimulus based on parameters.
         
         Args:
             simulation_time: Total simulation time (ms)
             dt: Time step (ms)
+            parameters: Optional parameters to override defaults. Can be a flat dictionary
+                       or a structured dictionary with node names as keys.
             
         Returns:
-            Dictionary with generated stimulus
+            Dictionary with generated stimulus and optimization metadata
         """
+        # If parameters are provided, configure the node
+        if parameters:
+            # Check if parameters is a structured dictionary with node names as keys
+            if self.name in parameters:
+                # Extract parameters for this node
+                node_params = parameters[self.name]
+                self.configure(**node_params)
+            else:
+                # Assume flat dictionary of parameters
+                self.configure(**parameters)
+            
         # Get parameters
         stimulus_type = self._parameters['stimulus_type']
         amplitude = self._parameters['amplitude']
@@ -135,59 +150,45 @@ class StimulusGeneratorNode(Node):
         frequency = self._parameters['frequency']
         noise_sigma = self._parameters['noise_sigma']
         
-        # Create time array
-        #t = np.arange(0, simulation_time, dt)
-        
-        # Initialize input current
-        #input_current = np.zeros_like(t)
-        
         # Generate stimulus based on type in nest
         if stimulus_type == 'step':
-            # Step stimulus
-            #mask = (t >= start_time) & (t <= end_time)
-            #input_current[mask] = amplitude
-            input_current = nest.Create("step_current_generator",params={
-                "amplitude_values": [self._parameters['amplitude'],],
-                "amplitude_times": [self._parameters['start_time'],],
-                "start": self._parameters['start_time'],
-                "stop": self._parameters['end_time'],
-                },
-                )
-            
+            input_current = nest.Create("step_current_generator", params={
+                "amplitude_values": [amplitude],
+                "amplitude_times": [start_time],
+                "start": start_time,
+                "stop": end_time,
+            })
         elif stimulus_type == 'sine':
-            # Sinusoidal stimulus
-            mask = (t >= start_time) & (t <= end_time)
-            # Convert frequency from Hz to rad/ms
-            angular_freq = 2 * np.pi * frequency / 1000
-            input_current[mask] = amplitude * np.sin(angular_freq * (t[mask] - start_time))
-            
-        elif stimulus_type == 'ramp':
-            # Ramp stimulus
-            mask = (t >= start_time) & (t <= end_time)
-            duration = end_time - start_time
-            if duration > 0:
-                input_current[mask] = amplitude * (t[mask] - start_time) / duration
-                
+            # Create sine wave stimulus
+            input_current = nest.Create("ac_generator", params={
+                "amplitude": amplitude,
+                "frequency": frequency,
+                "start": start_time,
+                "stop": end_time
+            })
         elif stimulus_type == 'noise':
-            # Noise stimulus
-            mask = (t >= start_time) & (t <= end_time)
-            input_current[mask] = amplitude + np.random.normal(0, noise_sigma, size=np.sum(mask))
+            # Create noise stimulus
+            input_current = nest.Create("noise_generator", params={
+                "mean": amplitude,
+                "std": noise_sigma,
+                "start": start_time,
+                "stop": end_time
+            })
+        else:
+            # Default to step current
+            input_current = nest.Create("step_current_generator", params={
+                "amplitude_values": [amplitude],
+                "amplitude_times": [start_time],
+                "start": start_time,
+                "stop": end_time,
+            })
         
-        # Create stimulus info
-        stimulus_info = {
-            'type': stimulus_type,
-            'amplitude': amplitude,
-            'start_time': start_time,
-            'end_time': end_time,
-            'frequency': frequency,
-            'noise_sigma': noise_sigma,
-            'simulation_time': simulation_time,
-            'dt': dt
-        }
+        # Get optimization metadata
+        optimization_metadata = self.get_optimizable_parameters()
         
         print(f"Generated {stimulus_type} stimulus with amplitude {amplitude} nA")
         
         return {
             'input_current': input_current,
-            'stimulus_info': stimulus_info
+            'parameter_metadata': {self.name: optimization_metadata}
         }

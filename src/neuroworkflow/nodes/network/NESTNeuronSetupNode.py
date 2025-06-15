@@ -1,7 +1,8 @@
 """
-Neuron setup node for parameter optimization example.
+Enhanced neuron setup node for parameter optimization example.
 
-This module provides a node for creating and configuring neuron models.
+This module provides a node for creating and configuring neuron models,
+with added support for exposing optimization metadata.
 """
 
 from typing import Dict, Any, Optional
@@ -14,14 +15,13 @@ import nest
 
 
 class NESTNeuronSetupNode(Node):
-    """Node for creating and configuring neuron models.
-    This class represents a neuron model with configurable parameters.
-    In a real implementation, this could be a more complex model or
-    interface with external neural simulators."""
+    """Enhanced node for creating and configuring neuron models.
+    This class represents a neuron model with configurable parameters and
+    exposes optimization metadata for joint optimization."""
     
     NODE_DEFINITION = NodeDefinitionSchema(
-        type='neuron_setup',
-        description='Creates and configures a neuron model in NEST',
+        type='enhanced_neuron_setup',
+        description='Creates and configures a neuron model in NEST with optimization metadata',
         
         parameters={
             'nest_model': ParameterDefinition(
@@ -70,6 +70,10 @@ class NESTNeuronSetupNode(Node):
             'nest_neuron_config': PortDefinition(
                 type=PortType.DICT,
                 description='Neuron configuration parameters'
+            ),
+            'parameter_metadata': PortDefinition(
+                type=PortType.DICT,
+                description='Metadata about optimizable parameters'
             )
         },
         
@@ -77,13 +81,13 @@ class NESTNeuronSetupNode(Node):
             'create_neuron': MethodDefinition(
                 description='Create and configure a neuron in NEST',
                 inputs=['parameters'],
-                outputs=['nest_neuron', 'nest_neuron_config']
+                outputs=['nest_neuron', 'nest_neuron_config', 'parameter_metadata']
             )
         }
     )
     
     def __init__(self, name: str):
-        """Initialize the NeuronSetupNode.
+        """Initialize the EnhancedNESTNeuronSetupNode.
         
         Args:
             name: Name of the node
@@ -103,14 +107,22 @@ class NESTNeuronSetupNode(Node):
         """Create and configure a neuron model.
         
         Args:
-            parameters: Optional parameters to override defaults
+            parameters: Optional parameters to override defaults. Can be a flat dictionary
+                       or a structured dictionary with node names as keys.
             
         Returns:
-            Dictionary with neuron model and configuration
+            Dictionary with neuron model, configuration, and optimization metadata
         """
         # If parameters are provided, configure the node
         if parameters:
-            self.configure(**parameters)
+            # Check if parameters is a structured dictionary with node names as keys
+            if self.name in parameters:
+                # Extract parameters for this node
+                node_params = parameters[self.name]
+                self.configure(**node_params)
+            else:
+                # Assume flat dictionary of parameters
+                self.configure(**parameters)
         
         # Create nest neuron object
         neuro_params = {
@@ -132,11 +144,15 @@ class NESTNeuronSetupNode(Node):
             'refractory_period': self._parameters['refractory_period'],
         }
         
+        # Get optimization metadata
+        optimization_metadata = self.get_optimizable_parameters()
+        
         print(f"Created neuron model with parameters:")
         for key, value in config.items():
             print(f"  {key}: {value}")
             
         return {
             'nest_neuron': neuron,
-            'nest_neuron_config': config
+            'nest_neuron_config': config,
+            'parameter_metadata': {self.name: optimization_metadata}
         }

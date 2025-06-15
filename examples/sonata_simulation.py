@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 """
-Example using the installed NeuroWorkflow library.
+Simple simulation example using the NeuroWorkflow library.
 
-This example demonstrates how to use the NeuroWorkflow library after installation.
+This example demonstrates how to create a basic workflow for neural simulation
+using the NeuroWorkflow library.
 """
+
+import sys
+import os
+
+# Add the src directory to the Python path to import the library
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
 from neuroworkflow import WorkflowBuilder
 from neuroworkflow.nodes.network import BuildSonataNetworkNode
@@ -15,18 +22,17 @@ def main():
     # Create nodes
     build_network = BuildSonataNetworkNode("SonataNetworkBuilder")
     build_network.configure(
-        sonata_path="/Users/carlosengutierrez/Downloads/neuro-workflow/data/300_pointneurons/",  # Path to our SONATA configuration
+        sonata_path="../data/300_pointneurons",
         net_config_file="circuit_config.json",
         sim_config_file="simulation_config.json",
         hdf5_hyperslab_size=1024
     )
-
-    # Print node information
-    print(build_network)
     
     simulate_network = SimulateSonataNetworkNode("SonataNetworkSimulation")
     simulate_network.configure(
         simulation_time=1000.0,
+        record_from_population="internal",
+        record_n_neurons=40
     )
     
     # Create workflow
@@ -56,5 +62,4 @@ def main():
 
 
 if __name__ == "__main__":
-    import sys
     sys.exit(main())

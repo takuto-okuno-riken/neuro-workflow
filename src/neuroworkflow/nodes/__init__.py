@@ -8,7 +8,7 @@ This package provides a collection of ready-to-use nodes for various tasks.
 from neuroworkflow.nodes.network import BuildSonataNetworkNode, NESTNeuronSetupNode
 from neuroworkflow.nodes.simulation import SimulateSonataNetworkNode, NeuronSimulationNode
 from neuroworkflow.nodes.analysis import SpikeAnalysisNode
-from neuroworkflow.nodes.optimization import NeuronOptimizationNode
+from neuroworkflow.nodes.optimization import JointOptimizationNode
 from neuroworkflow.nodes.stimulus import StimulusGeneratorNode
 
 

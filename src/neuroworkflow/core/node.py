@@ -346,6 +346,34 @@ class Node:
             Dictionary of parameter names to optimization metadata
         """
         return self._optimizable_parameters
+        
+    def get_output(self, name: str) -> Any:
+        """Get the current value of an output port.
+        
+        Args:
+            name: Name of the output port
+            
+        Returns:
+            The current value of the output port
+            
+        Raises:
+            ValueError: If the port is not found
+        """
+        port = self.get_output_port(name)
+        return port.value
+        
+    def set_input(self, name: str, value: Any) -> None:
+        """Set the value of an input port.
+        
+        Args:
+            name: Name of the input port
+            value: Value to set
+            
+        Raises:
+            ValueError: If the port is not found
+        """
+        port = self.get_input_port(name)
+        port.value = value
     
     def configure(self, **parameters) -> 'Node':
         """Configure node parameters.
