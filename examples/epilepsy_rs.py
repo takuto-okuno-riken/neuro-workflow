@@ -1,3 +1,8 @@
+'''
+Example from:
+   Modeling resting state in epilepsia:
+   https://nbviewer.thevirtualbrain.org/url/docs.thevirtualbrain.org/demos/exploring_resting_state_in_epilepsy.ipynb
+'''
 import sys
 import os
 import numpy as np
@@ -10,9 +15,12 @@ if src_path not in sys.path:
 
 # Import NeuroWorkflow components
 from neuroworkflow import WorkflowBuilder
-from neuroworkflow.nodes.network import TVBConnectivitySetUpNode, TVBEpileptorNode, TVBIntegratorNode, TVBVisualizationNode
-from neuroworkflow.nodes.stimulus import TVBMonitorNode
-from neuroworkflow.nodes.simulation import TVBSimulatorNode
+from neuroworkflow.nodes.network.TVBConnectivitySetUpNode import TVBConnectivitySetUpNode
+from neuroworkflow.nodes.network.TVBEpileptorNode import TVBEpileptorNode
+from neuroworkflow.nodes.network.TVBIntegratorNode import TVBIntegratorNode
+from neuroworkflow.nodes.analysis.TVBVisualizationNode import TVBVisualizationNode
+from neuroworkflow.nodes.stimulus.TVBMonitorNode import TVBMonitorNode
+from neuroworkflow.nodes.simulation.TVBSimulatorNode import TVBSimulatorNode
 
 
 # upload and setup connectivity in TVB

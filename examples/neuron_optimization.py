@@ -16,10 +16,10 @@ from typing import Dict, Any
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
 from neuroworkflow.core.workflow import WorkflowBuilder
-from neuroworkflow.nodes.optimization import JointOptimizationNode
-from neuroworkflow.nodes.simulation import NeuronSimulationNode
-from neuroworkflow.nodes.stimulus import StimulusGeneratorNode
-from neuroworkflow.nodes.network import NESTNeuronSetupNode
+from neuroworkflow.nodes.optimization.JointOptimizationNode import JointOptimizationNode
+from neuroworkflow.nodes.simulation.NeuronSimulationNode import NeuronSimulationNode
+from neuroworkflow.nodes.stimulus.StimulusGeneratorNode import StimulusGeneratorNode
+from neuroworkflow.nodes.network.NESTNeuronSetupNode import NESTNeuronSetupNode
 
 
 def main():

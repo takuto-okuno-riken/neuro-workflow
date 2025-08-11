@@ -13,8 +13,8 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
 from neuroworkflow import WorkflowBuilder
-from neuroworkflow.nodes.network import BuildSonataNetworkNode
-from neuroworkflow.nodes.simulation import SimulateSonataNetworkNode
+from neuroworkflow.nodes.network.BuildSonataNetworkNode import BuildSonataNetworkNode
+from neuroworkflow.nodes.simulation.SimulateSonataNetworkNode import SimulateSonataNetworkNode
 
 
 def main():

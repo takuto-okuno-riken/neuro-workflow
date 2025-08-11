@@ -2,13 +2,11 @@
 Pre-built node implementations for the NeuroWorkflow system.
 
 This package provides a collection of ready-to-use nodes for various tasks.
+
+Each node is self-contained and should be imported directly from its module,
+
+For example:
+    from neuroworkflow.nodes.network.TVBVisualizationNode import TVBVisualizationNode
+    from neuroworkflow.nodes.simulation.TVBSimulatorNode import TVBSimulatorNode
+
 """
-
-# Import node implementations for easy access
-from neuroworkflow.nodes.network import BuildSonataNetworkNode, NESTNeuronSetupNode, TVBConnectivitySetUpNode, TVBEpileptorNode, TVBIntegratorNode, TVBVisualizationNode
-from neuroworkflow.nodes.simulation import SimulateSonataNetworkNode, NeuronSimulationNode, TVBSimulatorNode
-from neuroworkflow.nodes.analysis import SpikeAnalysisNode
-from neuroworkflow.nodes.optimization import JointOptimizationNode
-from neuroworkflow.nodes.stimulus import StimulusGeneratorNode, TVBMonitorNode
-
-
