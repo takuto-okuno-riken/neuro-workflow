@@ -12,6 +12,7 @@ from typing import Dict, List, Union, Any, Type, Optional, Tuple
 
 class PortType(Enum):
     """Enumeration of port data types."""
+    # Memory-based types (existing)
     ANY = auto()
     INT = auto()
     FLOAT = auto()
@@ -21,9 +22,18 @@ class PortType(Enum):
     DICT = auto()
     OBJECT = auto()
     
+    # I/O-based types (new - Snakemake boundaries)
+    FILE_PATH = auto()      # Generic file path
+    CSV_FILE = auto()       # CSV data file
+    JSON_FILE = auto()      # JSON configuration/data
+    PICKLE_FILE = auto()    # Python pickle file
+    NUMPY_FILE = auto()     # NumPy array file
+    HDF5_FILE = auto()      # HDF5 dataset file
+    
     def to_python_type(self) -> Type:
         """Convert PortType to Python type."""
         type_map = {
+            # Memory types
             PortType.INT: int,
             PortType.FLOAT: float,
             PortType.STR: str,
@@ -31,9 +41,29 @@ class PortType(Enum):
             PortType.LIST: list,
             PortType.DICT: dict,
             PortType.OBJECT: object,
-            PortType.ANY: object
+            PortType.ANY: object,
+            
+            # I/O types (all represented as file paths)
+            PortType.FILE_PATH: str,
+            PortType.CSV_FILE: str,
+            PortType.JSON_FILE: str,
+            PortType.PICKLE_FILE: str,
+            PortType.NUMPY_FILE: str,
+            PortType.HDF5_FILE: str,
         }
         return type_map[self]
+    
+    def is_io_type(self) -> bool:
+        """Check if this port type represents I/O (file-based) data."""
+        io_types = {
+            PortType.FILE_PATH, PortType.CSV_FILE, PortType.JSON_FILE,
+            PortType.PICKLE_FILE, PortType.NUMPY_FILE, PortType.HDF5_FILE
+        }
+        return self in io_types
+    
+    def is_memory_type(self) -> bool:
+        """Check if this port type represents in-memory data."""
+        return not self.is_io_type()
 
 
 @dataclass
@@ -42,6 +72,14 @@ class PortDefinition:
     type: Union[PortType, Type] = PortType.ANY
     description: str = ""
     optional: bool = False
+    
+    def is_io_port(self) -> bool:
+        """Check if this is an I/O port (Snakemake boundary)."""
+        return isinstance(self.type, PortType) and self.type.is_io_type()
+    
+    def is_memory_port(self) -> bool:
+        """Check if this is a memory port (internal computation)."""
+        return not self.is_io_port()
 
 
 @dataclass
