@@ -1,0 +1,16 @@
+FROM python:3.11.11-slim
+
+# jupyter
+RUN pip install --no-cache-dir jupyterlab
+
+# 作業ディレクトリを設定
+WORKDIR /app
+
+# プロジェクトファイルをコピー
+COPY . .
+
+# 8888番ポートを公開
+EXPOSE 8888
+
+# コマンドを実行
+CMD ["jupyter", "lab", "--ip=0.0.0.0", "--allow-root", "--no-browser", "--NotebookApp.token='oistworkflow1234'", "--NotebookApp.password=", "--notebook-dir=/app"]

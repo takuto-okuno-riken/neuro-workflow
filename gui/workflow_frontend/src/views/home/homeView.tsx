@@ -11,13 +11,12 @@ import {
   Edge,
   BackgroundVariant,
   Connection,
-  MiniMapProps,
-  ControlProps,
   ReactFlowInstance,
   NodeMouseHandler,
-  Handle,
-  Position,
+  EdgeMouseHandler,
   NodeProps,
+  NodeChange,
+  EdgeChange,
 } from '@xyflow/react';
 import {
   HStack,
@@ -34,369 +33,409 @@ import {
   Text,
   useToast,
   VStack,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
   Badge,
-  Select,
-  Input,
-  FormControl,
-  FormLabel,
-  Flex,
-  IconButton,
 } from '@chakra-ui/react';
-import { AddIcon, DeleteIcon, CheckIcon } from '@chakra-ui/icons';
+import { ViewIcon } from '@chakra-ui/icons';
+import { CodeEditorModal } from './components/codeEditorModal';
 import '@xyflow/react/dist/style.css';
 import SideBoxArea from '../box/boxView';
-
-// 型定義
-interface SchemaField {
-  title: string;
-  type: string;
-  description?: string;
-}
-
-interface CalculationNodeData {
-  label: string;
-  schema: SchemaField[];
-  nodeType?: string;
-  operation?: string;
-}
-
-interface Project {
-  id: string;
-  name: string;
-  description?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-interface FlowData {
-  nodes: Node[];
-  edges: Edge[];
-}
-
-// 計算ノードのカスタムコンポーネント
-const CalculationNode = ({ data, isConnectable }: NodeProps<CalculationNodeData>) => {
-  const schema = data.schema || [];
-  
-  return (
-    <Box
-      bg="white"
-      border="2px solid #e2e8f0"
-      borderRadius="lg"
-      minWidth="200px"
-      maxWidth="280px"
-      boxShadow="md"
-      _hover={{ boxShadow: "lg" }}
-      position="relative"
-    >
-      {/* ヘッダー */}
-      <Box 
-        bg="purple.500" 
-        color="white" 
-        p={2} 
-        borderTopRadius="lg"
-        fontWeight="bold"
-        textAlign="center"
-        fontSize="sm"
-      >
-        {data.label}
-      </Box>
-      
-      {/* パラメータ・結果 */}
-      <Box p={0}>
-        {schema.map((field, index) => (
-          <Box
-            key={index}
-            position="relative"
-            py={1.5}
-            px={2}
-            borderBottom={index < schema.length - 1 ? "1px solid #e2e8f0" : "none"}
-            display="flex"
-            justifyContent="space-between"
-            alignItems="center"
-            minHeight="28px"
-            bg={field.title === 'result' ? 'green.50' : 'gray.50'}
-          >
-            <Text fontSize="xs" fontWeight="medium">{field.title}</Text>
-            <Badge 
-              colorScheme={field.type === 'number' ? 'blue' : 'gray'} 
-              size="sm"
-              fontSize="10px"
-            >
-              {field.type}
-            </Badge>
-            
-            {/* 入力パラメータの場合は左側にハンドル */}
-            {field.title !== 'result' && (
-              <Handle
-                type="target"
-                position={Position.Left}
-                id={`${field.title}-input`}
-                style={{
-                  background: '#e53e3e',
-                  border: '2px solid #fff',
-                  width: 10,
-                  height: 10,
-                  left: -5,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  position: 'absolute',
-                }}
-                isConnectable={isConnectable}
-              />
-            )}
-            
-            {/* 結果の場合は右側にハンドル */}
-            {field.title === 'result' && (
-              <Handle
-                type="source"
-                position={Position.Right}
-                id={`${field.title}-output`}
-                style={{
-                  background: '#38a169',
-                  border: '2px solid #fff',
-                  width: 10,
-                  height: 10,
-                  right: -5,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  position: 'absolute',
-                }}
-                isConnectable={isConnectable}
-              />
-            )}
-            
-            {/* 値出力ノードの場合は右側にハンドル */}
-            {field.title === 'value' && (
-              <Handle
-                type="source"
-                position={Position.Right}
-                id={`${field.title}-output`}
-                style={{
-                  background: '#38a169',
-                  border: '2px solid #fff',
-                  width: 10,
-                  height: 10,
-                  right: -5,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  position: 'absolute',
-                }}
-                isConnectable={isConnectable}
-              />
-            )}
-          </Box>
-        ))}
-      </Box>
-    </Box>
-  );
-};
-
-const controlsStyle: Partial<ControlProps> = {
-  style: {
-    background: 'transparent',
-  },
-  showZoom: true,
-  showFitView: true,
-  showInteractive: true,
-};
-
-const minimapStyle: Partial<MiniMapProps> = {
-  style: {
-    background: '#f8f9fa',
-    border: '1px solid #e2e8f0',
-  },
-  maskColor: 'rgb(50, 50, 50, 0.8)',
-  nodeColor: '#8b5cf6',
-};
-
-// ノードメニューコンポーネント
-const NodeMenu = ({ 
-  position, 
-  onDelete, 
-  onView, 
-  onEdit, 
-  onClose 
-}: {
-  position: { x: number, y: number },
-  onDelete: () => void,
-  onView: () => void,
-  onEdit: () => void,
-  onClose: () => void,
-}) => {
-  return (
-    <Box
-      position="fixed" 
-      left={`${position.x}px`}
-      top={`${position.y}px`}
-      zIndex={1000}
-      bg="white"
-      border="1px solid #e2e8f0"
-      borderRadius="md"
-      boxShadow="lg"
-      width="120px"
-      overflow="hidden"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <Button
-        width="100%"
-        justifyContent="flex-start"
-        borderRadius="0"
-        variant="ghost"
-        size="sm"
-        onClick={() => {
-          onView();
-          onClose();
-        }}
-      >
-        View
-      </Button>
-      <Button
-        width="100%"
-        justifyContent="flex-start"
-        borderRadius="0"
-        variant="ghost"
-        size="sm"
-        onClick={() => {
-          onEdit();
-          onClose();
-        }}
-      >
-        Edit
-      </Button>
-      <Button
-        width="100%"
-        justifyContent="flex-start"
-        borderRadius="0"
-        variant="ghost"
-        size="sm"
-        colorScheme="red"
-        onClick={() => {
-          onDelete();
-          onClose();
-        }}
-      >
-        Delete
-      </Button>
-    </Box>
-  );
-};
-
-// プロジェクト選択コンポーネント
-const ProjectSelector = ({ 
-  projects, 
-  selectedProject, 
-  onProjectChange, 
-  onSave, 
-  isSaving 
-}: {
-  projects: Project[];
-  selectedProject: string | null;
-  onProjectChange: (projectId: string) => void;
-  onSave: () => void;
-  isSaving: boolean;
-}) => {
-  return (
-    <Box
-      position="absolute"
-      top="10px"
-      left="10px"
-      p={4}
-      bg="white"
-      borderRadius="md"
-      boxShadow="md"
-      zIndex={5}
-      minWidth="300px"
-    >
-      <Flex align="center" gap={3}>
-        <FormControl>
-          <FormLabel fontSize="sm" mb={1}>Project</FormLabel>
-          <Select 
-            value={selectedProject || ''} 
-            onChange={(e) => onProjectChange(e.target.value)}
-            size="sm"
-          >
-            <option value="">Select Project</option>
-            {projects.map(project => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </Select>
-        </FormControl>
-        <IconButton
-          icon={<CheckIcon />}
-          colorScheme="blue"
-          size="sm"
-          onClick={onSave}
-          isLoading={isSaving}
-          isDisabled={!selectedProject}
-          aria-label="Save"
-        />
-      </Flex>
-    </Box>
-  );
-};
+import {SchemaFields,CalculationNodeData,Project,FlowData } from './type'
+import { ProjectSelector } from './components/projectSelector';
+import { EdgeMenu } from './components/edgeMenu';
+import { NodeMenu } from './components/nodeMenu';
+import {CalculationNode} from './components/calculationNode';
+import {controlsStyle, minimapStyle} from './style';
+import { createAuthHeaders } from '../../api/authHeaders';
+import { useUploadedNodes } from '../../hooks/useUploadedNodes';
+import NodeDetailsContent from './components/nodeDetailModal';
 
 // nodeTypesをコンポーネント外で定義
 const nodeTypes = {
   calculationNode: CalculationNode,
 };
 
-// API Base URL を環境変数から取得（今は使わない）
-// const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-
 const HomeView = () => {
   const toast = useToast();
-
+  const { data: uploadedNodes, isLoading: isNodesLoading, error } = useUploadedNodes();
   const reactFlowInstance = useRef<ReactFlowInstance | null>(null);
-
+  const { isOpen: isCodeOpen, onOpen: onCodeOpen, onClose: onCodeClose } = useDisclosure();
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<CalculationNodeData>>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  const [menuPosition, setMenuPosition] = useState<{ x: number, y: number } | null>(null);
+  // 自動保存関連の状態
+  const [isConnected, setIsConnected] = useState<boolean>(true);
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState<boolean>(true);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ノードメニュー関連の状態
+  const [nodeMenuPosition, setNodeMenuPosition] = useState<{ x: number, y: number } | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+
+  // エッジメニュー関連の状態
+  const [edgeMenuPosition, setEdgeMenuPosition] = useState<{ x: number, y: number } | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
 
   const { isOpen: isViewOpen, onOpen: onViewOpen, onClose: onViewClose } = useDisclosure();
   const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure();
   const [selectedNode, setSelectedNode] = useState<Node<CalculationNodeData> | null>(null);
-  const [editingSchema, setEditingSchema] = useState<SchemaField[]>([]);
+
+  // API通信用のヘルパー関数
+  const createAuthHeadersLocal = async () => {
+    return await createAuthHeaders();
+  };
+
+  // 接続状態を監視
+  useEffect(() => {
+    const checkConnection = async () => {
+      try {
+        const headers = await createAuthHeaders();
+        const response = await fetch('/api/workflow/', {
+          method: 'HEAD',
+          credentials: 'include',
+          headers: {
+            ...headers
+          }
+        });
+        setIsConnected(response.ok);
+      } catch (error) {
+        setIsConnected(false);
+      }
+    };
+
+    checkConnection();
+    const interval = setInterval(checkConnection, 30000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  // ノードの個別作成
+  const createNodeAPI = async (nodeData: Node<CalculationNodeData>) => {
+  if (!selectedProject || !autoSaveEnabled) {
+    console.log('Skipping node creation API call:', { selectedProject, autoSaveEnabled });
+    return;
+  }
+
+  console.log('Creating node via API:', nodeData);
+  
+  try {
+    const headers = await createAuthHeadersLocal();
+    const requestBody = {
+      id: nodeData.id,
+      position: nodeData.position,
+      type: nodeData.type,
+      data: nodeData.data,
+    };
+    
+    console.log('Request body:', requestBody);
+    
+    const response = await fetch(`/api/workflow/${selectedProject}/nodes/`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    const responseData = await response.json();
+    console.log('Create node response:', responseData);
+
+    if (!response.ok) {
+      setIsConnected(false);
+      throw new Error(`HTTP ${response.status}: ${responseData.error || 'Failed to create node'}`);
+    }
+    
+    setIsConnected(true);
+    console.log('Node created successfully:', responseData);
+  } catch (error) {
+    console.error('Error creating node:', error);
+    setIsConnected(false);
+    toast({
+      title: "Save Error",
+      description: `Failed to save node: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      status: "error",
+      duration: 3000,
+      isClosable: true,
+    });
+  }
+};
+
+  // ノードの個別更新
+  const updateNodeAPI = async (nodeId: string, nodeData: Partial<Node<CalculationNodeData>>) => {
+  if (!selectedProject || !autoSaveEnabled) {
+    console.log('Skipping node update API call:', { selectedProject, autoSaveEnabled });
+    return;
+  }
+
+  console.log('Updating node via API:', { nodeId, nodeData });
+
+  try {
+    const headers = await createAuthHeadersLocal();
+    const requestBody = {
+      position: nodeData.position,
+      type: nodeData.type,
+      data: nodeData.data,
+    };
+    
+    console.log('Update request body:', requestBody);
+
+    const response = await fetch(`/api/workflow/${selectedProject}/nodes/${nodeId}/`, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    const responseData = await response.json();
+    console.log('Update node response:', responseData);
+
+    if (!response.ok) {
+      setIsConnected(false);
+      throw new Error(`HTTP ${response.status}: ${responseData.error || 'Failed to update node'}`);
+    }
+    
+    setIsConnected(true);
+  } catch (error) {
+    console.error('Error updating node:', error);
+    setIsConnected(false);
+    toast({
+      title: "Save Error",
+      description: `Failed to update node: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      status: "error",
+      duration: 2000,
+      isClosable: true,
+    });
+  }
+};
+
+  const deleteNodeAPI = async (nodeId: string) => {
+  if (!selectedProject || !autoSaveEnabled) {
+    console.log('Skipping node deletion API call:', { selectedProject, autoSaveEnabled });
+    return;
+  }
+
+  console.log('Deleting node via API:', nodeId);
+
+  try {
+    const headers = await createAuthHeadersLocal();
+    const response = await fetch(`/api/workflow/${selectedProject}/nodes/${nodeId}/`, {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: {
+        ...headers,
+      },
+    });
+
+    // 204 No Content の場合はレスポンスボディがない
+    let responseData;
+    if (response.status !== 204) {
+      responseData = await response.json();
+      console.log('Delete node response:', responseData);
+    }
+
+    if (!response.ok) {
+      setIsConnected(false);
+      throw new Error(`HTTP ${response.status}: ${responseData?.error || 'Failed to delete node'}`);
+    }
+    
+    setIsConnected(true);
+    console.log('Node deleted successfully');
+  } catch (error) {
+    console.error('Error deleting node:', error);
+    setIsConnected(false);
+    toast({
+      title: "Save Error",
+      description: `Failed to delete node: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      status: "error",
+      duration: 2000,
+      isClosable: true,
+    });
+  }
+};
+
+  // エッジの個別作成
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const createEdgeAPI = async (edgeData: Edge) => {
+    if (!selectedProject || !autoSaveEnabled) {
+      console.log('Skipping edge creation API call:', { selectedProject, autoSaveEnabled });
+      return;
+    }
+
+    console.log('Creating edge via API:', edgeData);
+
+    try {
+      const headers = await createAuthHeadersLocal();
+      const requestBody = {
+        id: edgeData.id,
+        source: edgeData.source,
+        target: edgeData.target,
+        sourceHandle: edgeData.sourceHandle,
+        targetHandle: edgeData.targetHandle,
+        data: edgeData.data || {},
+      };
+      
+      console.log('Edge request body:', requestBody);
+
+      const response = await fetch(`/api/workflow/${selectedProject}/edges/`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      const responseData = await response.json();
+      console.log('Create edge response:', responseData);
+
+      if (!response.ok) {
+        setIsConnected(false);
+        throw new Error(`HTTP ${response.status}: ${responseData.error || 'Failed to create edge'}`);
+      }
+      
+      setIsConnected(true);
+    } catch (error) {
+      console.error('Error creating edge:', error);
+      setIsConnected(false);
+      toast({
+        title: "Save Error",
+        description: `Failed to save connection: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        status: "error",
+        duration: 2000,
+        isClosable: true,
+      });
+    }
+  };
+
+  // エッジの個別削除
+  const deleteEdgeAPI = async (edgeId: string) => {
+  if (!selectedProject || !autoSaveEnabled) {
+    console.log('Skipping edge deletion API call:', { selectedProject, autoSaveEnabled });
+    return;
+  }
+
+  console.log('Deleting edge via API:', edgeId);
+
+  try {
+    const headers = await createAuthHeadersLocal();
+    const response = await fetch(`/api/workflow/${selectedProject}/edges/${edgeId}/`, {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: {
+        ...headers,
+      },
+    });
+
+    // 204 No Content または 200 OK の場合
+    let responseData;
+    if (response.status !== 204) {
+      responseData = await response.json();
+      console.log('Delete edge response:', responseData);
+    }
+
+    if (!response.ok) {
+      setIsConnected(false);
+      throw new Error(`HTTP ${response.status}: ${responseData?.error || 'Failed to delete edge'}`);
+    }
+    
+    setIsConnected(true);
+    console.log('Edge deleted successfully');
+  } catch (error) {
+    console.error('Error deleting edge:', error);
+    setIsConnected(false);
+    toast({
+      title: "Save Error",
+      description: `Failed to delete connection: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      status: "error",
+      duration: 2000,
+      isClosable: true,
+    });
+  }
+};
+
+  // デバウンスされた保存関数
+  const debouncedSave = useCallback((action: () => Promise<void>) => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    
+    saveTimeoutRef.current = setTimeout(async () => {
+      await action();
+    }, 500);
+  }, []);
+
+  // ノード変更のハンドラー（オーバーライド）
+  const handleNodesChange = useCallback((changes: NodeChange[]) => {
+    onNodesChange(changes);
+    
+    if (!autoSaveEnabled) return;
+    
+    changes.forEach((change) => {
+      switch (change.type) {
+        case 'position':
+          if (change.position) {
+            debouncedSave(() => updateNodeAPI(change.id, { 
+              position: change.position 
+            }));
+          }
+          break;
+          
+        case 'remove':
+          deleteNodeAPI(change.id);
+          break;
+      }
+    });
+  }, [onNodesChange, debouncedSave, autoSaveEnabled]);
+
+  // エッジ変更のハンドラー（オーバーライド）
+  const handleEdgesChange = useCallback((changes: EdgeChange[]) => {
+    onEdgesChange(changes);
+    
+    if (!autoSaveEnabled) return;
+    
+    changes.forEach((change) => {
+      switch (change.type) {
+        case 'remove':
+          deleteEdgeAPI(change.id);
+          break;
+      }
+    });
+  }, [onEdgesChange, autoSaveEnabled]);
 
   // プロジェクト一覧を取得
   useEffect(() => {
     const fetchProjects = async () => {
       try {
-        console.log('Fetching projects...'); // デバッグ用
+        console.log('Fetching projects...');
+        const header = await createAuthHeaders();
         const response = await fetch('/api/workflow/', {
-          credentials: 'include',  // Cookie（セッション）を含める
+          credentials: 'include',
           headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
+            ...header
           }
         });
-        console.log('Projects response status:', response.status); // デバッグ用
-        console.log('Projects response headers:', response.headers.get('content-type')); // デバッグ用
+        console.log('Projects response status:', response.status);
         
         if (response.ok) {
           const data: Project[] = await response.json();
-          console.log('Projects data:', data); // デバッグ用
+          console.log('Projects data:', data);
           setProjects(data);
+          setIsConnected(true);
         } else {
           console.error('Projects API failed with status:', response.status);
-          const text = await response.text();
-          console.error('Response text:', text.substring(0, 200)); // 最初の200文字だけ表示
+          setIsConnected(false);
         }
       } catch (error) {
         console.error('Failed to fetch projects:', error);
+        setIsConnected(false);
         toast({
           title: "Error",
           description: "Failed to fetch projects",
@@ -421,14 +460,20 @@ const HomeView = () => {
 
     setIsLoading(true);
     try {
-      const response = await fetch(`http://localhost:3000/api/workflow/${projectId}/flow/`, {
-        credentials: 'include',  // Cookie（セッション）を含める
+      const header = await createAuthHeaders();
+      const response = await fetch(`/api/workflow/${projectId}/flow/`, {
+        credentials: 'include',
+        headers:{
+          ...header
+        }
       });
       if (response.ok) {
         const flowData: FlowData = await response.json();
+
         setNodes(flowData.nodes as Node<CalculationNodeData>[] || []);
         setEdges(flowData.edges || []);
         setSelectedProject(projectId);
+        setIsConnected(true);
         
         toast({
           title: "Loaded",
@@ -437,9 +482,12 @@ const HomeView = () => {
           duration: 2000,
           isClosable: true,
         });
+      } else {
+        setIsConnected(false);
       }
     } catch (error) {
       console.error('Failed to fetch flow data:', error);
+      setIsConnected(false);
       toast({
         title: "Error",
         description: "Failed to load flow data",
@@ -452,97 +500,243 @@ const HomeView = () => {
     }
   };
 
-  // フローデータを保存
-  const handleSave = async () => {
-    if (!selectedProject) return;
-
-    setIsSaving(true);
-    try {
-      const response = await fetch(`http://localhost:3000/api/workflow/${selectedProject}/flow/`, {
-        method: 'PUT',
-        credentials: 'include',  // Cookie（セッション）を含める
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          nodes,
-          edges,
-        }),
-      });
-
-      if (response.ok) {
-        toast({
-          title: "Saved",
-          description: "Flow data saved successfully",
-          status: "success",
-          duration: 2000,
-          isClosable: true,
-        });
-      } else {
-        throw new Error('Save failed');
-      }
-    } catch (error) {
-      console.error('Failed to save flow:', error);
-      toast({
-        title: "Error",
-        description: "Failed to save",
-        status: "error",
-        duration: 3000,
-        isClosable: true,
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
+  // 接続時のハンドラー（エッジ作成） - タイプチェック付き
   const onConnect = useCallback(
     (params: Connection) => {
+      // ハンドルIDからタイプ情報を直接抽出
+      // フォーマット: {nodeId}-{portName}-{portDirection}-{type}
+      let sourceType = null;
+      let targetType = null;
+      let sourcePortName = null;
+      let targetPortName = null;
+      
+      if (params.sourceHandle) {
+        const sourceParts = params.sourceHandle.split('-');
+        // 最後がtype
+        sourceType = sourceParts[sourceParts.length - 1];
+        // 最後から2番目がport_direction
+        const sourcePortDirection = sourceParts[sourceParts.length - 2];
+        // nodeIdとport_directionとtypeを除いた部分がポート名
+        sourcePortName = sourceParts.slice(1, -2).join('-');
+        
+        console.log('Source handle parsing:', {
+          handle: params.sourceHandle,
+          portName: sourcePortName,
+          portDirection: sourcePortDirection,
+          type: sourceType
+        });
+      }
+      
+      if (params.targetHandle) {
+        const targetParts = params.targetHandle.split('-');
+        // 最後がtype
+        targetType = targetParts[targetParts.length - 1];
+        // 最後から2番目がport_direction
+        const targetPortDirection = targetParts[targetParts.length - 2];
+        // nodeIdとport_directionとtypeを除いた部分がポート名
+        targetPortName = targetParts.slice(1, -2).join('-');
+        
+        console.log('Target handle parsing:', {
+          handle: params.targetHandle,
+          portName: targetPortName,
+          portDirection: targetPortDirection,
+          type: targetType
+        });
+      }
+      
+      // タイプが取得できない場合
+      if (!sourceType || !targetType) {
+        toast({
+          title: "Connection Failed",
+          description: "Could not determine port types",
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+        });
+        return;
+      }
+      
+      // タイプが一致しているかチェック（大文字小文字を無視）
+      if (sourceType.toUpperCase() !== targetType.toUpperCase()) {
+        toast({
+          title: "Type Mismatch",
+          description: `Cannot connect: ${sourcePortName || 'output'} (${sourceType}) and ${targetPortName || 'input'} (${targetType}) have different types`,
+          status: "warning",
+          duration: 4000,
+          isClosable: true,
+        });
+        console.warn(
+          `Type mismatch: ${sourcePortName} (${sourceType}) → ${targetPortName} (${targetType})`
+        );
+        return;
+      }
+      
+      // タイプが一致している場合は接続を作成
+      const edgeId = `${params.source}-${params.sourceHandle || 'output'}-to-${params.target}-${params.targetHandle || 'input'}`;
+      
       const newEdge = { 
+        id: edgeId,
         ...params, 
         style: { stroke: '#8b5cf6', strokeWidth: 2 }
       };
-      setEdges((eds) => addEdge(newEdge, eds));
+      
+      console.log('Creating new edge:', {
+        edge: newEdge,
+        sourcePort: `${sourcePortName} (${sourceType})`,
+        targetPort: `${targetPortName} (${targetType})`,
+        typesMatch: true
+      });
+      
+      setEdges((eds) => {
+        const updatedEdges = addEdge(newEdge, eds);
+        console.log('Updated edges state:', updatedEdges.length);
+        return updatedEdges;
+      });
+
+      // APIに送信（非同期で実行）
+      if (autoSaveEnabled) {
+        console.log('Calling createEdgeAPI...');
+        createEdgeAPI(newEdge).then(() => {
+          console.log('Edge creation API call completed');
+        });
+      } else {
+        console.log('Auto-save disabled, skipping edge API call');
+      }
       
       toast({
         title: "Connected",
-        description: `Created connection between calculation nodes`,
+        description: `Connected ${sourcePortName || 'output'} (${sourceType}) → ${targetPortName || 'input'} (${targetType})`,
         status: "success",
         duration: 2000,
         isClosable: true,
       });
     },
-    [setEdges, toast],
+    [setEdges, toast, autoSaveEnabled, createEdgeAPI],
   );
+
 
   const onNodeClick: NodeMouseHandler<Node<CalculationNodeData>> = useCallback((event, node) => {
     event.preventDefault();
     
-    setMenuPosition({
+    setNodeMenuPosition({
+      x: event.clientX,
+      y: event.clientY,
+    });
+
+    console.log("クリックしたぞね", node)
+
+    setSelectedNodeId(node.id);
+    setSelectedNode(node);
+  }, []);
+
+  const onEdgeClick: EdgeMouseHandler = useCallback((event, edge) => {
+    event.preventDefault();
+    
+    setEdgeMenuPosition({
       x: event.clientX,
       y: event.clientY,
     });
     
-    setSelectedNodeId(node.id);
-    setSelectedNode(node);
-    setEditingSchema([...node.data.schema]);
+    setSelectedEdgeId(edge.id);
   }, []);
 
   const closeMenu = useCallback(() => {
-    setMenuPosition(null);
+    setNodeMenuPosition(null);
     setSelectedNodeId(null);
+    setEdgeMenuPosition(null);
+    setSelectedEdgeId(null);
   }, []);
 
   const onPaneClick = useCallback(() => {
     closeMenu();
   }, [closeMenu]);
 
-  // ノード削除処理
+  // キーボードイベントハンドラー（削除処理）
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        const selectedEdges = edges.filter(edge => edge.selected);
+        if (selectedEdges.length > 0) {
+          event.preventDefault();
+          if (autoSaveEnabled) {
+            selectedEdges.forEach(edge => {
+              deleteEdgeAPI(edge.id);
+            });
+          }
+          setEdges((eds) => eds.filter(edge => !edge.selected));
+          
+          toast({
+            title: "Deleted",
+            description: `${selectedEdges.length} edge(s) deleted`,
+            status: "info",
+            duration: 2000,
+            isClosable: true,
+          });
+        }
+        
+        const selectedNodes = nodes.filter(node => node.selected);
+        if (selectedNodes.length > 0) {
+          event.preventDefault();
+          const nodeIds = selectedNodes.map(node => node.id);
+          
+          if (autoSaveEnabled) {
+            selectedNodes.forEach(node => {
+              deleteNodeAPI(node.id);
+            });
+            
+            const relatedEdges = edges.filter(
+              (edge) => nodeIds.includes(edge.source) || nodeIds.includes(edge.target)
+            );
+            relatedEdges.forEach(edge => {
+              deleteEdgeAPI(edge.id);
+            });
+          }
+          
+          setNodes((nds) => nds.filter(node => !node.selected));
+          setEdges((eds) => eds.filter(
+            (edge) => !nodeIds.includes(edge.source) && !nodeIds.includes(edge.target)
+          ));
+          
+          toast({
+            title: "Deleted",
+            description: `${selectedNodes.length} node(s) deleted`,
+            status: "info",
+            duration: 2000,
+            isClosable: true,
+          });
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [nodes, edges, setNodes, setEdges, toast, autoSaveEnabled]);
+
+  // ノード削除処理（メニューから）
   const handleDeleteNode = useCallback(() => {
     if (selectedNodeId) {
+      if (autoSaveEnabled) {
+        deleteNodeAPI(selectedNodeId);
+      }
+      
       setNodes((nds) => nds.filter((node) => node.id !== selectedNodeId));
-      setEdges((eds) => eds.filter(
-        (edge) => edge.source !== selectedNodeId && edge.target !== selectedNodeId
-      ));
+      setEdges((eds) => {
+        const relatedEdges = eds.filter(
+          (edge) => edge.source === selectedNodeId || edge.target === selectedNodeId
+        );
+        
+        if (autoSaveEnabled) {
+          relatedEdges.forEach(edge => {
+            deleteEdgeAPI(edge.id);
+          });
+        }
+        
+        return eds.filter(
+          (edge) => edge.source !== selectedNodeId && edge.target !== selectedNodeId
+        );
+      });
       
       toast({
         title: "Deleted",
@@ -552,51 +746,48 @@ const HomeView = () => {
         isClosable: true,
       });
     }
-  }, [selectedNodeId, setNodes, setEdges, toast]);
+  }, [selectedNodeId, setNodes, setEdges, toast, autoSaveEnabled]);
 
-  // スキーマ編集
-  const handleSchemaChange = (index: number, field: keyof SchemaField, value: string) => {
-    const newSchema = [...editingSchema];
-    newSchema[index] = { ...newSchema[index], [field]: value };
-    setEditingSchema(newSchema);
-  };
-
-  const addSchemaField = () => {
-    setEditingSchema([...editingSchema, { title: '', type: 'number' }]);
-  };
-
-  const removeSchemaField = (index: number) => {
-    const newSchema = editingSchema.filter((_, i) => i !== index);
-    setEditingSchema(newSchema);
-  };
-
-  const saveSchemaChanges = () => {
-    if (selectedNode) {
-      setNodes((nds) => 
-        nds.map((node) => 
-          node.id === selectedNode.id 
-            ? { ...node, data: { ...node.data, schema: editingSchema } }
-            : node
-        )
-      );
+  // エッジ削除処理（メニューから）
+  const handleDeleteEdge = useCallback(() => {
+    if (selectedEdgeId) {
+      if (autoSaveEnabled) {
+        deleteEdgeAPI(selectedEdgeId);
+      }
+      
+      setEdges((eds) => eds.filter((edge) => edge.id !== selectedEdgeId));
       
       toast({
-        title: "Updated",
-        description: "Schema updated successfully",
-        status: "success",
+        title: "Deleted",
+        description: `Connection deleted`,
+        status: "info",
         duration: 2000,
         isClosable: true,
       });
     }
-    onEditClose();
-  };
+  }, [selectedEdgeId, setEdges, toast, autoSaveEnabled]);
 
-  // ドロップ処理
-  const onDrop = useCallback(
+
+    const onDrop = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
       event.preventDefault();
 
-      if (!reactFlowInstance.current) return;
+      if (!reactFlowInstance.current) {
+        console.log('ReactFlow instance not ready');
+        return;
+      }
+
+      if (!selectedProject) {
+        console.log('No project selected');
+        toast({
+          title: "No Project",
+          description: "Please select a project first",
+          status: "warning",
+          duration: 2000,
+          isClosable: true,
+        });
+        return;
+      }
 
       const reactFlowBounds = event.currentTarget.getBoundingClientRect();
       const position = reactFlowInstance.current.screenToFlowPosition({
@@ -613,72 +804,178 @@ const HomeView = () => {
         return;
       }
 
-      if (!nodeData) return;
-
-      // ノードタイプに基づいてスキーマを決定（強制的に正しいスキーマを設定）
-      let schema: SchemaField[] = [];
-      let nodeType = 'calculationNode';
-
-      // ラベルで判定して強制的に正しいスキーマを設定
-      if (nodeData.label.includes('Number A') || nodeData.label.includes('Number B')) {
-        schema = [{ title: 'value', type: 'number', description: 'Input value' }];
-        nodeType = 'NumberInput';
-      } else if (nodeData.label.includes('Addition')) {
-        schema = [
-          { title: 'a', type: 'number', description: 'First number' },
-          { title: 'b', type: 'number', description: 'Second number' },
-          { title: 'result', type: 'number', description: 'Sum result' }
-        ];
-      } else if (nodeData.label.includes('Subtraction')) {
-        schema = [
-          { title: 'a', type: 'number', description: 'First number' },
-          { title: 'b', type: 'number', description: 'Second number' },
-          { title: 'result', type: 'number', description: 'Difference result' }
-        ];
-      } else if (nodeData.label.includes('Multiplication')) {
-        schema = [
-          { title: 'a', type: 'number', description: 'First number' },
-          { title: 'b', type: 'number', description: 'Second number' },
-          { title: 'result', type: 'number', description: 'Product result' }
-        ];
-      } else if (nodeData.label.includes('Division')) {
-        schema = [
-          { title: 'a', type: 'number', description: 'Dividend' },
-          { title: 'b', type: 'number', description: 'Divisor' },
-          { title: 'result', type: 'number', description: 'Quotient result' }
-        ];
-      } else {
-        // デフォルト：汎用計算ノード
-        schema = [
-          { title: 'input', type: 'number', description: 'Input value' },
-          { title: 'result', type: 'number', description: 'Output result' }
-        ];
+      if (!nodeData) {
+        console.log('No node data received');
+        return;
       }
 
-      console.log(`Creating node with label: ${nodeData.label}, schema:`, schema); // デバッグ用
+      console.log('====================================');
+      console.log('🔄 NEW DROP EVENT');
+      console.log('Dropped nodeData:', nodeData);
+      console.log('NodeData ID:', nodeData.id);
+      console.log('NodeData Label:', nodeData.label);
+      console.log('====================================');
+      
+      let schema: SchemaFields = {
+        inputs: {},
+        outputs: {},
+        parameters: {},
+        methods: {}
+      };
+      let nodeType = 'calculationNode';
+      let label = nodeData.label || nodeData.name || 'New Calculator';
+      let fileName: string = ""
+      // uploadedNodesから該当するノードのスキーマを取得
+      if (uploadedNodes?.nodes && Array.isArray(uploadedNodes.nodes)) {
+        console.log('Available nodes in uploadedNodes:', uploadedNodes.nodes.length);
+        
+        // マッチング処理
+        let matchedNode: UploadedNode | null = null;
+        
+        // IDで完全一致を試みる
+        if (nodeData.id) {
+          matchedNode = uploadedNodes.nodes.find((node: UploadedNode) => node.id === nodeData.id);
+          if (matchedNode) {
+            console.log('✅ Matched by ID:', nodeData.id);
+          }
+        }
+        
+        // IDでマッチしない場合、ラベルで試みる
+        if (!matchedNode && nodeData.label) {
+          matchedNode = uploadedNodes.nodes.find((node: UploadedNode) => node.label === nodeData.label);
+          if (matchedNode) {
+            console.log('✅ Matched by label:', nodeData.label);
+          }
+        }
+        
+        // それでもマッチしない場合、nameで試みる
+        if (!matchedNode && nodeData.name) {
+          matchedNode = uploadedNodes.nodes.find((node: UploadedNode) => node.name === nodeData.name);
+          if (matchedNode) {
+            console.log('✅ Matched by name:', nodeData.name);
+          }
+        }
+        
+        if (matchedNode && matchedNode.schema) {
+          console.log('📋 Processing schema for:', matchedNode.label);
+          console.log('Original schema structure:', matchedNode.schema);
+          
+          // 新しい構造のスキーマをそのまま使用
+          schema = matchedNode.schema;
+          
+          // スキーマの内容を確認
+          const inputCount = schema.inputs ? Object.keys(schema.inputs).length : 0;
+          const outputCount = schema.outputs ? Object.keys(schema.outputs).length : 0;
+          const paramCount = schema.parameters ? Object.keys(schema.parameters).length : 0;
+          const methodCount = schema.methods ? Object.keys(schema.methods).length : 0;
+          
+          console.log(`✅ Schema loaded: ${inputCount} inputs, ${outputCount} outputs, ${paramCount} parameters, ${methodCount} methods`);
+          
+          // デフォルトスキーマが必要な場合
+          if (inputCount === 0 && outputCount === 0) {
+            console.warn('⚠️ No ports found, using default schema');
+            schema = {
+              inputs: {
+                "default_input": {
+                  name: "default_input",
+                  type: "any",
+                  description: "Default input",
+                  port_direction: "input"
+                }
+              },
+              outputs: {
+                "default_output": {
+                  name: "default_output",
+                  type: "any",
+                  description: "Default output",
+                  port_direction: "output"
+                }
+              },
+              parameters: {},
+              methods: {}
+            };
+          }
+          
+          // matchedNodeから正しいラベルとタイプを取得
+          nodeType = matchedNode.nodeType || matchedNode.type || 'calculationNode';
+          label = matchedNode.label || matchedNode.name || label;
+          fileName = matchedNode.file_name || ""  
+        } else {
+          console.log('❌ No matching node found, using fallback schema');
+          // フォールバックスキーマ
+          schema = {
+            inputs: {
+              "input": {
+                name: "input",
+                type: "any",
+                description: "Input",
+                port_direction: "input"
+              }
+            },
+            outputs: {
+              "output": {
+                name: "output",
+                type: "any",
+                description: "Output",
+                port_direction: "output"
+              }
+            },
+            parameters: {},
+            methods: {}
+          };
+        }
+      } else {
+        console.warn('❌ uploadedNodes not available, using default schema');
+      }
 
+      // 新しいIDを生成
+      const newNodeId = `calc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
       const newNode: Node<CalculationNodeData> = {
-        id: `calc_${Date.now()}`,
+        id: newNodeId,
         type: 'calculationNode',
         position,
         data: { 
-          label: nodeData.label || 'New Calculator',
+          file_name: fileName,
+          label: label,
           schema: schema,
           nodeType: nodeType
         },
       };
 
-      setNodes((nds) => nds.concat(newNode));
+      console.log('🎯 Creating NEW node:');
+      console.log('ノードデータ', newNode)
+      console.log('  ID:', newNodeId);
+      console.log('  Label:', label);
+      console.log('  Schema:', schema);
+       console.log(' file name:', fileName);
+      console.log('====================================');
+
+      // UIの更新
+      setNodes((nds) => {
+        const updated = nds.concat(newNode);
+        console.log('Total nodes after adding:', updated.length);
+        return updated;
+      });
+
+      // APIに送信
+      if (autoSaveEnabled) {
+        createNodeAPI(newNode);
+      }
+      
+      // カウント計算（新しい構造に対応）
+      const inputCount = schema.inputs ? Object.keys(schema.inputs).length : 0;
+      const outputCount = schema.outputs ? Object.keys(schema.outputs).length : 0;
       
       toast({
         title: "Node Added",
-        description: `New calculation node "${nodeData.label}" added`,
+        description: `"${label}" (${inputCount} inputs, ${outputCount} outputs)`,
         status: "success",
         duration: 2000,
         isClosable: true,
       });
     },
-    [setNodes, toast]
+    [setNodes, toast, selectedProject, autoSaveEnabled, uploadedNodes]
   );
 
   const onDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
@@ -690,117 +987,38 @@ const HomeView = () => {
     reactFlowInstance.current = instance;
   }, []);
 
-  const handleViewEditClick = useCallback(() => {
-    onViewClose();
-    onEditOpen();
-  }, [onViewClose, onEditOpen]);
 
-  // サンプルノードテンプレートを取得
-  interface NodeTemplate {
-    id: string;
-    type: string;
-    label: string;
-    icon: any;
-    description: string;
-    category: string;
-  }
+  const handleViewCode = useCallback(() => {
+    if (!selectedProject) {
+      toast({
+        title: "No Project Selected",
+        description: "Please select a project first",
+        status: "warning",
+        duration: 2000,
+        isClosable: true,
+      });
+      return;
+    }
+    onCodeOpen();
+  }, [selectedProject, onCodeOpen, toast]);
 
-  const [nodeTemplates, setNodeTemplates] = useState<{ nodes: NodeTemplate[] }>({ nodes: [] });
 
+  // クリーンアップ
   useEffect(() => {
-    const fetchSampleFlow = async () => {
-      try {
-        console.log('Fetching sample flow data...'); // デバッグ用
-        const response = await fetch('/api/workflow/sample-flow/', {
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-          }
-        });
-        console.log('Response status:', response.status); // デバッグ用
-        console.log('Response headers:', response.headers.get('content-type')); // デバッグ用
-        
-        if (response.ok) {
-          const sampleData: FlowData = await response.json();
-          console.log('Sample data received:', sampleData); // デバッグ用
-          console.log('First node schema:', sampleData.nodes[0]?.data); // 最初のノードのデータを詳しく確認
-          
-          // サンプルデータからノードテンプレートを作成
-          const templates: NodeTemplate[] = sampleData.nodes.map(node => {
-            const nodeData = node.data as CalculationNodeData;
-            console.log(`Node ${node.id} data:`, nodeData); // 各ノードのデータを確認
-            return {
-              id: node.id,
-              type: 'calculationNode',
-              label: nodeData.label,
-              icon: null,
-              description: nodeData.schema ? `${nodeData.schema.length} parameters` : 'Calculation node',
-              category: nodeData.label.includes('Number') ? 'Input Nodes' : 'Calculation Nodes'
-            };
-          });
-          
-          console.log('Generated templates:', templates); // デバッグ用
-          setNodeTemplates({ nodes: templates });
-        } else {
-          console.warn('Sample flow API returned non-OK status:', response.status);
-          setNodeTemplates({ nodes: getDefaultTemplates() });
-        }
-      } catch (error) {
-        console.error('Failed to fetch sample flow:', error);
-        setNodeTemplates({ nodes: getDefaultTemplates() });
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
       }
     };
-
-    // デフォルトテンプレートを返す関数
-    const getDefaultTemplates = (): NodeTemplate[] => [
-      {
-        id: 'number-input',
-        type: 'calculationNode',
-        label: 'Number Input',
-        icon: null,
-        description: 'Input number value',
-        category: 'Input Nodes'
-      },
-      {
-        id: 'addition',
-        type: 'calculationNode',
-        label: 'Addition',
-        icon: null,
-        description: 'Add two numbers',
-        category: 'Calculation Nodes'
-      },
-      {
-        id: 'subtraction',
-        type: 'calculationNode',
-        label: 'Subtraction',
-        icon: null,
-        description: 'Subtract two numbers',
-        category: 'Calculation Nodes'
-      },
-      {
-        id: 'multiplication',
-        type: 'calculationNode',
-        label: 'Multiplication',
-        icon: null,
-        description: 'Multiply two numbers',
-        category: 'Calculation Nodes'
-      },
-      {
-        id: 'division',
-        type: 'calculationNode',
-        label: 'Division',
-        icon: null,
-        description: 'Divide two numbers',
-        category: 'Calculation Nodes'
-      }
-    ];
-
-    fetchSampleFlow();
   }, []);
 
   return (
     <HStack>
-      <SideBoxArea nodes={nodeTemplates} />
+      <SideBoxArea 
+        nodes={uploadedNodes} 
+        isLoading={isNodesLoading}  // ノード専用
+        error={error} 
+      />
       <div style={{ width: '98.5vw', height: '92vh', marginLeft: '300px', position: 'relative' }}>
         <style>
           {`
@@ -845,8 +1063,8 @@ const HomeView = () => {
           projects={projects}
           selectedProject={selectedProject}
           onProjectChange={handleProjectChange}
-          onSave={handleSave}
-          isSaving={isSaving}
+          autoSaveEnabled={autoSaveEnabled}
+          isConnected={isConnected}
         />
         
         {/* 説明 */}
@@ -854,34 +1072,99 @@ const HomeView = () => {
           position="absolute"
           top="10px"
           right="10px"
-          p={3}
+          p={4}
           bg="white"
-          borderRadius="md"
-          boxShadow="md"
-          maxWidth="300px"
+          borderRadius="lg"
+          boxShadow="lg"
+          maxWidth="340px"
           zIndex={5}
+          borderWidth={1}
+          borderColor="gray.200"
         >
-          <Text fontWeight="bold" fontSize="sm">Calculation Flow Designer</Text>
-          <Text fontSize="xs" color="gray.600">
-            Drag and drop calculation nodes from the left panel to create mathematical workflows. Connect outputs to inputs to build complex calculations.
-          </Text>
-        </Box>
+  <VStack spacing={4} align="stretch">
+    {/* ヘッダー */}
+    <HStack justify="space-between" align="center">
+      <Text fontWeight="bold" fontSize="md" color="gray.800">
+        🔬 Flow Designer
+      </Text>
+      {isConnected ? (
+        <Badge colorScheme="green" size="sm" variant="subtle">
+          Online
+        </Badge>
+      ) : (
+        <Badge colorScheme="red" size="sm" variant="subtle">
+          Offline
+        </Badge>
+      )}
+    </HStack>
+    
+    {/* 説明文 */}
+          <Box>
+            <Text fontSize="sm" color="gray.600" lineHeight="1.4">
+              Drag nodes from the left panel to build mathematical workflows. Connect outputs to inputs to create calculations.
+            </Text>
+          </Box>
+          
+          {/* Tips & Status */}
+          <Box>
+            <Text fontSize="xs" color="blue.600" mb={1}>
+              💡 Tips: Click edges to delete • Press Delete key for selected items
+            </Text>
+            {!autoSaveEnabled && (
+              <Text fontSize="xs" color="orange.600">
+                ⚠️ Auto-save disabled
+              </Text>
+            )}
+          </Box>
+          
+          {/* Action Buttons */}
+          <VStack spacing={2} align="stretch">
+            <Button
+              leftIcon={<ViewIcon />}
+              colorScheme="purple"
+              variant="outline"
+              size="sm"
+              onClick={handleViewCode}
+              isDisabled={!selectedProject}
+              _hover={{ bg: "purple.50", transform: "translateY(-1px)" }}
+              _disabled={{ 
+                opacity: 0.4,
+                cursor: "not-allowed"
+              }}
+              transition="all 0.2s"
+            >
+              {selectedProject ? "🚀 View Generated Code" : "Select Project First"}
+            </Button>
+            
+            {selectedProject && (
+              <Text fontSize="xs" color="gray.500" textAlign="center">
+                Project: {projects.find(p => p.id === selectedProject)?.name || 'Unknown'}
+              </Text>
+            )}
+          </VStack>
+        </VStack>
+      </Box>
         
         <ReactFlow
           nodes={nodes}
           edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
+          onNodesChange={handleNodesChange}
+          onEdgesChange={handleEdgesChange}
           onConnect={onConnect}
           onInit={onInit}
           onDrop={onDrop}
           onDragOver={onDragOver}
           onNodeClick={onNodeClick}
+          onEdgeClick={onEdgeClick}
           onPaneClick={onPaneClick}
           nodeTypes={nodeTypes} 
           fitView
           attributionPosition="bottom-left"
           connectionLineStyle={{ stroke: '#8b5cf6', strokeWidth: 2 }}
+          defaultEdgeOptions={{
+            style: { stroke: '#8b5cf6', strokeWidth: 2 },
+            type: 'default',
+          }}
         >
           <Controls {...controlsStyle} />
           <MiniMap {...minimapStyle} />
@@ -905,9 +1188,9 @@ const HomeView = () => {
         )}
         
         {/* ノードメニュー */}
-        {menuPosition && (
+        {nodeMenuPosition && (
           <NodeMenu
-            position={menuPosition}
+            position={nodeMenuPosition}
             onDelete={handleDeleteNode}
             onView={onViewOpen}
             onEdit={onEditOpen}
@@ -915,109 +1198,48 @@ const HomeView = () => {
           />
         )}
         
+        {/* エッジメニュー */}
+        {edgeMenuPosition && (
+          <EdgeMenu
+            position={edgeMenuPosition}
+            onDelete={handleDeleteEdge}
+            onClose={closeMenu}
+          />
+        )}
+        
         {/* View Modal */}
-        <Modal isOpen={isViewOpen} onClose={onViewClose} size="lg">
+        <Modal isOpen={isViewOpen} onClose={onViewClose} size="2xl">
           <ModalOverlay />
-          <ModalContent>
+          <ModalContent maxW="1200px" w="90vw">
             <ModalHeader>Node Details: {selectedNode?.data.label}</ModalHeader>
             <ModalCloseButton />
-            <ModalBody>
-              <VStack spacing={4} align="stretch">
-                <Box>
-                  <Text fontWeight="bold">Node Name: {selectedNode?.data.label}</Text>
-                  <Text>ID: {selectedNode?.id}</Text>
-                  <Text>Type: {selectedNode?.data.nodeType || 'Calculation'}</Text>
-                </Box>
-                
-                <Box>
-                  <Text fontWeight="bold" mb={2}>Parameters & Results</Text>
-                  <Table size="sm" variant="simple">
-                    <Thead>
-                      <Tr>
-                        <Th>Parameter</Th>
-                        <Th>Data Type</Th>
-                        <Th>Description</Th>
-                      </Tr>
-                    </Thead>
-                    <Tbody>
-                      {selectedNode?.data.schema?.map((field, index) => (
-                        <Tr key={index}>
-                          <Td fontWeight={field.title === 'result' ? 'bold' : 'normal'}>
-                            {field.title}
-                          </Td>
-                          <Td>
-                            <Badge colorScheme="blue">{field.type}</Badge>
-                          </Td>
-                          <Td fontSize="sm">{field.description}</Td>
-                        </Tr>
-                      ))}
-                    </Tbody>
-                  </Table>
-                </Box>
-              </VStack>
+            <ModalBody marginTop={5}>
+              {/* ここに新しいコンポーネントを入れる */}
+              <NodeDetailsContent  nodeData={selectedNode}/>
             </ModalBody>
             <ModalFooter>
-              <Button colorScheme="blue" mr={3} onClick={handleViewEditClick}>
-                Edit
-              </Button>
               <Button variant="ghost" onClick={onViewClose}>Close</Button>
             </ModalFooter>
           </ModalContent>
         </Modal>
-        
-        {/* Edit Modal */}
-        <Modal isOpen={isEditOpen} onClose={onEditClose} size="lg">
-          <ModalOverlay />
-          <ModalContent>
-            <ModalHeader>Edit Parameters: {selectedNode?.data.label}</ModalHeader>
-            <ModalCloseButton />
-            <ModalBody>
-              <VStack spacing={4} align="stretch">
-                <Button leftIcon={<AddIcon />} onClick={addSchemaField} size="sm">
-                  Add Parameter
-                </Button>
-                
-                {editingSchema.map((field, index) => (
-                  <Flex key={index} gap={2} align="center">
-                    <Input
-                      placeholder="Parameter Name"
-                      value={field.title}
-                      onChange={(e) => handleSchemaChange(index, 'title', e.target.value)}
-                      size="sm"
-                    />
-                    <Select
-                      value={field.type}
-                      onChange={(e) => handleSchemaChange(index, 'type', e.target.value)}
-                      size="sm"
-                      width="150px"
-                    >
-                      <option value="number">number</option>
-                      <option value="string">string</option>
-                      <option value="boolean">boolean</option>
-                    </Select>
-                    <IconButton
-                      icon={<DeleteIcon />}
-                      size="sm"
-                      colorScheme="red"
-                      variant="ghost"
-                      onClick={() => removeSchemaField(index)}
-                      aria-label="Delete"
-                    />
-                  </Flex>
-                ))}
-              </VStack>
-            </ModalBody>
-            <ModalFooter>
-              <Button colorScheme="blue" mr={3} onClick={saveSchemaChanges}>
-                Save
-              </Button>
-              <Button variant="ghost" onClick={onEditClose}>Cancel</Button>
-            </ModalFooter>
-          </ModalContent>
-        </Modal>
+
+
+        <CodeEditorModal
+          isOpen={isCodeOpen}
+          onClose={onCodeClose}
+          identifier={selectedProject}
+          endpoints={{
+            getCode: '/workflow/{identifier}/code/',
+            saveCode: '/workflow/{identifier}/code/',
+            executeCode: '/workflow/{identifier}/execute/'
+          }}
+          title="Workflow Editor"
+          showExecute={true}
+        />
       </div>
     </HStack>
   );
 }
+//http://localhost:3000/api/workflow/${projectId}/code/
 
 export default HomeView;

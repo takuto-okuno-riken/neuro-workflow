@@ -14,6 +14,7 @@ import {
   Spinner,
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
+import { createAuthHeaders } from '../../api/authHeaders'; // 認証ヘッダー用
 
 interface CreateFlowProjectRequest {
   name: string;
@@ -21,11 +22,18 @@ interface CreateFlowProjectRequest {
 }
 
 interface CreateFlowProjectResponse {
-  id?: number;
-  name?: string;
-  description?: string;
-  created_at?: string;
-  error?: string;
+  id: string;  // UUIDなのでstring
+  name: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+  is_active: boolean;
+  owner?: number;
+}
+
+interface ErrorResponse {
+  error: string;
+  details?: string;
 }
 
 const CreateFlowPj: React.FC = () => {
@@ -35,25 +43,38 @@ const CreateFlowPj: React.FC = () => {
   const toast = useToast();
   const navigate = useNavigate();
 
-  const API_ENDPOINT = `http://localhost:3000/api/workflow/`;
+  // バックエンドのワークフローAPIエンドポイント
+  const API_ENDPOINT = `/api/workflow/`;
 
-  // ワークフロー作成API呼び出し
+  // ワークフロープロジェクト作成API呼び出し
   const createFlowProject = async (data: CreateFlowProjectRequest): Promise<CreateFlowProjectResponse> => {
     try {
+      console.log('Creating flow project with data:', data);
+      
+      // 認証ヘッダーを取得
+      const authHeaders = await createAuthHeaders();
+      
       const response = await fetch(API_ENDPOINT, {
         method: 'POST',
+        credentials: 'include',  // Cookie（セッション）を含める
         headers: {
+          ...authHeaders,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(data),
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+
       if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorData}`);
+        const errorData: ErrorResponse = await response.json();
+        console.error('API error response:', errorData);
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
 
       const result: CreateFlowProjectResponse = await response.json();
+      console.log('Project created successfully:', result);
       return result;
     } catch (error) {
       console.error('API call failed:', error);
@@ -79,35 +100,51 @@ const CreateFlowPj: React.FC = () => {
       // API呼び出し用のデータを準備
       const requestData: CreateFlowProjectRequest = {
         name: projectName.trim(),
-        description: note.trim(),
+        description: note.trim() || '', // 空文字列をデフォルトに
       };
 
       const response = await createFlowProject(requestData);
 
-      if (response.id) {
-        toast({
-          title: 'Creation Success',
-          description: `${projectName} has been created successfully`,
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
-        });
+      // 成功時の処理
+      toast({
+        title: 'Creation Success',
+        description: `"${response.name}" has been created successfully`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
 
-        // フォームをリセット
-        setProjectName('');
-        setNote('');
+      // フォームをリセット
+      setProjectName('');
+      setNote('');
 
-        // 作成されたワークフローの詳細画面に遷移
-        navigate(`/workflow/${response.id}`);
-      } else {
-        throw new Error(response.error || 'Creation failed');
-      }
+      // 作成されたワークフローの詳細画面に遷移（UUIDを使用）
+      //navigate(`/workflow/${response.id}`);
+      navigate(`/`);
+
     } catch (error) {
       console.error('Error creating flow project:', error);
       
+      let errorMessage = 'An unexpected error occurred';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      // 特定のエラーに対する詳細メッセージ
+      if (errorMessage.includes('401')) {
+        errorMessage = 'Authentication required. Please login first.';
+      } else if (errorMessage.includes('403')) {
+        errorMessage = 'Permission denied. You do not have access to create projects.';
+      } else if (errorMessage.includes('400')) {
+        errorMessage = 'Invalid project data. Please check your input.';
+      } else if (errorMessage.includes('500')) {
+        errorMessage = 'Server error. Please try again later.';
+      }
+      
       toast({
         title: 'Creation Failed',
-        description: error instanceof Error ? error.message : 'An unexpected error occurred',
+        description: errorMessage,
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -124,39 +161,55 @@ const CreateFlowPj: React.FC = () => {
   };
 
   return (
-    <VStack spacing={6} width="100%" p={6}>
-      <Text fontSize="2xl" fontWeight="bold" mb={2}>
-        Create Flow Project
+    <VStack spacing={6} width="100%" p={6} maxWidth="600px" mx="auto">
+      <Text fontSize="2xl" fontWeight="bold" mb={2} color="white">
+        🚀 Create Flow Project
+      </Text>
+
+      <Text fontSize="md" color="white" textAlign="center" mb={2}>
+        Create a new workflow project to design mathematical calculations
       </Text>
 
       <Divider my={4} />
 
       <VStack width="100%" spacing={5} align="start">
         <FormControl isRequired>
-          <FormLabel htmlFor="projectName">Project name</FormLabel>
+          <FormLabel htmlFor="projectName" fontSize="sm" fontWeight="semibold" color="white">
+            Project Name
+          </FormLabel>
           <Input 
-            id="projectname" 
-            placeholder="Project name ..."
+            id="projectName" 
+            placeholder="Enter your project name..."
             value={projectName}
             onChange={(e) => setProjectName(e.target.value)}
             isDisabled={isLoading}
+            size="md"
+            borderColor="gray.300"
+            _hover={{ borderColor: "blue.300" }}
+            _focus={{ borderColor: "blue.500", boxShadow: "0 0 0 1px #3182ce" }}
           />
         </FormControl>
 
         <FormControl>
-          <FormLabel htmlFor="note">Note</FormLabel>
+          <FormLabel htmlFor="note" fontSize="sm" fontWeight="semibold" color="white">
+            Description (Optional)
+          </FormLabel>
           <Textarea
             id="note"
-            placeholder="Note ..."
+            placeholder="Describe your workflow project..."
             rows={4}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             isDisabled={isLoading}
+            borderColor="gray.300"
+            _hover={{ borderColor: "blue.300" }}
+            _focus={{ borderColor: "blue.500", boxShadow: "0 0 0 1px #3182ce" }}
+            resize="vertical"
           />
         </FormControl>
       </VStack>
 
-      <Grid templateColumns="repeat(2, 1fr)" gap={4} width="100%" mt={4}>
+      <Grid templateColumns="repeat(2, 1fr)" gap={4} width="100%" mt={6}>
         <GridItem>
           <Button
             colorScheme="green"
@@ -166,12 +219,18 @@ const CreateFlowPj: React.FC = () => {
             isDisabled={!projectName.trim() || isLoading}
             onClick={handleRegistration}
             boxShadow="sm"
-            variant="outline"
-            _hover={{ boxShadow: "md", transform: "translateY(-2px)" }}
+            color="white"
+            _hover={{ 
+              boxShadow: "md", 
+              transform: "translateY(-2px)",
+              bg: "green.600",
+              color: "white"
+            }}
+            _active={{ transform: "translateY(0)" }}
             transition="all 0.2s"
             leftIcon={isLoading ? <Spinner size="sm" /> : undefined}
           >
-            {isLoading ? 'Creating...' : 'Create'}
+            {isLoading ? 'Creating Project...' : 'Create Project'}
           </Button>
         </GridItem>
         <GridItem>
@@ -181,7 +240,11 @@ const CreateFlowPj: React.FC = () => {
             size="lg"
             width="100%"
             onClick={handleCancel}
-            _hover={{ bg: "red.50" }}
+            _hover={{ 
+              bg: "red.50",
+              borderColor: "red.300",
+              color: "red.600"
+            }}
             isDisabled={isLoading}
           >
             Cancel

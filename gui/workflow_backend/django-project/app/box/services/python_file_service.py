@@ -1,0 +1,122 @@
+import os
+import hashlib
+from django.core.files.storage import default_storage
+from ..models import PythonFile
+from .python_analyzer import PythonNodeAnalyzer
+
+
+class PythonFileService:
+    """Pythonファイル管理サービス"""
+
+    def __init__(self):
+        self.analyzer = PythonNodeAnalyzer()
+
+    def create_python_file(self, file, user=None, name=None, description=None):
+        """
+        Pythonファイルを作成し、自動解析を実行
+
+        Args:
+            file: アップロードされたファイル
+            user: アップロードユーザー
+            name: ファイル名（オプション）
+            description: 説明（オプション）
+
+        Returns:
+            PythonFile instance
+        """
+        # ファイル内容を読み取り
+        file_content = file.read().decode("utf-8")
+
+        # ファイルハッシュを計算（重複チェック用）
+        file_hash = hashlib.sha256(file_content.encode("utf-8")).hexdigest()
+
+        # 重複チェック
+        existing_file = PythonFile.objects.filter(file_hash=file_hash).first()
+        if existing_file:
+            raise ValueError(f"File already exists: {existing_file.name}")
+
+        # ファイル名を決定
+        if not name:
+            name = file.name
+
+        # PythonFileインスタンス作成
+        python_file = PythonFile.objects.create(
+            name=name,
+            description=description or "",
+            file=file,
+            file_content=file_content,
+            uploaded_by=user,
+            file_size=file.size,
+            file_hash=file_hash,
+        )
+
+        # 自動解析実行
+        self._analyze_file(python_file)
+
+        return python_file
+
+    def _analyze_file(self, python_file):
+        """
+        ファイルを解析してノード情報を抽出
+
+        Args:
+            python_file: PythonFileインスタンス
+        """
+        try:
+            # ファイル内容を解析
+            node_classes = self.analyzer.analyze_file_content(python_file.file_content)
+
+            print(f"Analyzed {len(node_classes)} node classes:")
+            for node in node_classes:
+                print(f"  - {node['class_name']}")
+
+            # 解析結果をDBに保存（node_typeを追加！）
+            python_file.node_classes = {
+                node["class_name"]: {
+                    "description": node["description"],
+                    "node_type": node["node_type"],  # ← これが抜けていた！
+                    "parameters": node["parameters"],
+                    "inputs": node["inputs"],
+                    "outputs": node["outputs"],
+                    "methods": node["methods"],
+                }
+                for node in node_classes
+            }
+            python_file.is_analyzed = True
+            python_file.analysis_error = None
+            python_file.save()
+
+            print(
+                f"Successfully analyzed {len(node_classes)} node classes from {python_file.name}"
+            )
+
+        except Exception as e:
+            # 解析失敗時もファイルは保存するが、エラー情報を記録
+            python_file.is_analyzed = False
+            python_file.analysis_error = str(e)
+            python_file.save()
+
+            print(f"Failed to analyze file {python_file.name}: {e}")
+
+    def get_file_content(self, python_file):
+        """ファイル内容を取得"""
+        return python_file.file_content
+
+    def update_file_content(self, python_file, content):
+        """ファイル内容を更新し、再解析を実行"""
+        python_file.file_content = content
+        python_file.file_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        python_file.save()
+
+        # 再解析実行
+        self._analyze_file(python_file)
+
+        return python_file
+
+    def validate_python_syntax(self, content):
+        """Python構文をチェック"""
+        try:
+            compile(content, "<string>", "exec")
+            return True, None
+        except SyntaxError as e:
+            return False, str(e)

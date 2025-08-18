@@ -22,7 +22,10 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("api/", include("app.auth.urls")),
     path("api/box/", include("app.box.urls")),
+    path("api/workflow/", include("app.workflow.urls")),
+    # <uuid:user_id>/<uuid:workflow_id>/
 ]
 
 if settings.DEBUG:

@@ -17,15 +17,40 @@ import {
   Grid,
   GridItem,
   Divider,
+  Progress,
+  Spinner,
 } from '@chakra-ui/react';
-import { AttachmentIcon, CloseIcon } from '@chakra-ui/icons';
+import { AttachmentIcon, CloseIcon, CheckIcon } from '@chakra-ui/icons';
 import { useNavigate } from 'react-router-dom';
+
+// APIレスポンスの型定義
+interface UploadResponse {
+  id: string;
+  name: string;
+  description: string;
+  file: string;
+  uploaded_by: string | null;
+  uploaded_by_name: string | null;
+  file_size: number;
+  is_analyzed: boolean;
+  analysis_error: string | null;
+  node_classes_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface UploadError {
+  error: string;
+  [key: string]: any;
+}
 
 const BoxUpload: React.FC = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [fileName, setFileName] = useState<string>('');
-  const [className, setClassName] = useState<string>('');
-  const [note, setNote] = useState<string>('');
+  const [description, setDescription] = useState<string>('');
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadResponse[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
   const navigate = useNavigate();
@@ -49,7 +74,16 @@ const BoxUpload: React.FC = () => {
       if (!file.name.endsWith('.py')) {
         rejectedFiles.push({
           name: file.name,
-          reason: 'only upload python file ',
+          reason: 'Only Python files (.py) are allowed',
+        });
+        return;
+      }
+
+      // 10MB制限チェック
+      if (file.size > 10 * 1024 * 1024) {
+        rejectedFiles.push({
+          name: file.name,
+          reason: 'File size must be less than 10MB',
         });
         return;
       }
@@ -102,7 +136,15 @@ const BoxUpload: React.FC = () => {
         if (!file.name.endsWith('.py')) {
           rejectedFiles.push({
             name: file.name,
-            reason: 'Only Python files (.py) can be uploaded',
+            reason: 'Only Python files (.py) are allowed',
+          });
+          return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+          rejectedFiles.push({
+            name: file.name,
+            reason: 'File size must be less than 10MB',
           });
           return;
         }
@@ -138,12 +180,32 @@ const BoxUpload: React.FC = () => {
     }
   };
 
-  const handleRegistration = () => {
+  const uploadFile = async (file: File, name?: string, desc?: string): Promise<UploadResponse> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (name) formData.append('name', name);
+    if (desc) formData.append('description', desc);
+
+    const response = await fetch('/api/box/upload/', {
+      method: 'POST',
+      body: formData,
+      // Note: Content-Typeヘッダーは自動設定されるため指定しない
+    });
+
+    if (!response.ok) {
+      const errorData: UploadError = await response.json();
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  };
+
+  const handleRegistration = async () => {
     // 入力検証
     if (selectedFiles.length === 0) {
       toast({
-        title: 'input error',
-        description: 'Upload your Python file',
+        title: 'Input Error',
+        description: 'Please select your Python files',
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -153,7 +215,7 @@ const BoxUpload: React.FC = () => {
 
     if (!fileName.trim()) {
       toast({
-        title: 'input error',
+        title: 'Input Error',
         description: 'Please enter a file name',
         status: 'error',
         duration: 3000,
@@ -161,33 +223,86 @@ const BoxUpload: React.FC = () => {
       });
       return;
     }
-    toast({
-      title: 'Registration Success',
-      description: `${fileName} has been registered!`,
-      status: 'success',
-      duration: 3000,
-      isClosable: true,
-    });
-    
-    setSelectedFiles([]);
-    setFileName('');
-    setClassName('');
-    setNote('');
+
+    setIsUploading(true);
+    setUploadProgress(0);
+    const newUploadedFiles: UploadResponse[] = [];
+
+    try {
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        const fileNameToUse = selectedFiles.length === 1 ? fileName : file.name.replace(/\.py$/, '');
+        
+        try {
+          const result = await uploadFile(file, fileNameToUse, description);
+          newUploadedFiles.push(result);
+          
+          // プログレス更新
+          setUploadProgress(((i + 1) / selectedFiles.length) * 100);
+          
+          toast({
+            title: 'Upload Success',
+            description: `${result.name} has been uploaded successfully!`,
+            status: 'success',
+            duration: 3000,
+            isClosable: true,
+          });
+
+        } catch (error) {
+          console.error(`Failed to upload ${file.name}:`, error);
+          toast({
+            title: 'Upload Failed',
+            description: `Failed to upload ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            status: 'error',
+            duration: 5000,
+            isClosable: true,
+          });
+        }
+      }
+
+      if (newUploadedFiles.length > 0) {
+        setUploadedFiles(prev => [...prev, ...newUploadedFiles]);
+        
+        // フォームをリセット
+        setSelectedFiles([]);
+        setFileName('');
+        setDescription('');
+      }
+
+    } catch (error) {
+      console.error('Upload process failed:', error);
+      toast({
+        title: 'Upload Failed',
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
   };
 
   const handleCancel = () => {
     setSelectedFiles([]);
     setFileName('');
-    setClassName('');
-    setNote('');
+    setDescription('');
+    setUploadedFiles([]);
     navigate(-1);
   };
 
   return (
-    <VStack spacing={6} width="100%" p={6}>
-      <Text fontSize="2xl" fontWeight="bold" mb={2}>
-        File Upload
+    <VStack spacing={6} width="100%" p={6} maxWidth="600px" mx="auto">
+      <Text fontSize="2xl" fontWeight="bold" mb={2} color="white">
+        📁 Python File Upload
       </Text>
+      
+      <Text fontSize="md" color="white" textAlign="center" mb={2}>
+        Upload and analyze your Python files for code visualization
+      </Text>
+
+      <Divider my={4} />
       
       <Flex
         direction="column"
@@ -197,15 +312,19 @@ const BoxUpload: React.FC = () => {
         borderWidth={2}
         borderRadius="lg"
         borderStyle="dashed"
-        borderColor="blue.300"
-        bg="blue.50"
+        borderColor="blue.400"
+        bg="rgba(59, 130, 246, 0.1)"
         width="100%"
         minHeight="200px"
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         cursor="pointer"
         onClick={() => fileInputRef.current?.click()}
-        _hover={{ bg: 'blue.100' }}
+        _hover={{ 
+          bg: "rgba(59, 130, 246, 0.2)", 
+          borderColor: "blue.300",
+          transform: "translateY(-2px)"
+        }}
         transition="all 0.2s"
       >
         <Input
@@ -216,39 +335,41 @@ const BoxUpload: React.FC = () => {
           accept=".py"
           display="none"
         />
-        <Icon as={AttachmentIcon} w={12} h={12} color="blue.500" mb={4} />
-        <Text fontWeight="bold" fontSize="xl" mb={3} color="blue.700">
-            Drop Python files here
+        <Icon as={AttachmentIcon} w={12} h={12} color="blue.400" mb={4} />
+        <Text fontWeight="bold" fontSize="xl" mb={3} color="white">
+          Drop Python files here
         </Text>
-        <Text fontSize="md" color="blue.600">
-            Or, click to select a file
+        <Text fontSize="md" color="gray.300">
+          Or click to select files
         </Text>
-        <Text fontSize="sm" color="gray.500" mt={2}>
-            .py files only
+        <Text fontSize="sm" color="gray.400" mt={2}>
+          .py files only (max 10MB per file)
         </Text>
       </Flex>
 
       {selectedFiles.length > 0 && (
-        <Box width="100%" border="1px" borderColor="gray.200" borderRadius="md" p={4}>
-          <Text fontWeight="semibold" mb={3}>
-          Selected files ({selectedFiles.length})
+        <Box width="100%" border="1px" borderColor="gray.600" borderRadius="md" p={4} bg="rgba(255, 255, 255, 0.05)">
+          <Text fontWeight="semibold" mb={3} color="white">
+            Selected files ({selectedFiles.length})
           </Text>
           <List spacing={2} width="100%">
             {selectedFiles.map((file, index) => (
               <ListItem key={index}>
                 <HStack
                   p={3}
-                  bg="gray.50"
+                  bg="rgba(255, 255, 255, 0.1)"
                   borderRadius="md"
                   justifyContent="space-between"
                   borderLeft="4px"
                   borderLeftColor="blue.400"
+                  _hover={{ bg: "rgba(255, 255, 255, 0.15)" }}
+                  transition="all 0.2s"
                 >
                   <HStack>
-                    <Text fontWeight="medium">
+                    <Text fontWeight="medium" color="white">
                       {file.name}
                     </Text>
-                    <Text fontSize="sm" color="gray.500">
+                    <Text fontSize="sm" color="gray.300">
                       ({formatFileSize(file.size)})
                     </Text>
                   </HStack>
@@ -257,9 +378,69 @@ const BoxUpload: React.FC = () => {
                     variant="ghost"
                     colorScheme="red"
                     onClick={() => removeFile(index)}
+                    disabled={isUploading}
+                    _hover={{ bg: "red.500", color: "white" }}
                   >
                     <Icon as={CloseIcon} />
                   </Button>
+                </HStack>
+              </ListItem>
+            ))}
+          </List>
+        </Box>
+      )}
+
+      {isUploading && (
+        <Box width="100%" p={4} bg="rgba(59, 130, 246, 0.1)" borderRadius="md" border="1px" borderColor="blue.400">
+          <HStack mb={2}>
+            <Spinner size="sm" color="blue.400" />
+            <Text fontWeight="semibold" color="white">Uploading files...</Text>
+          </HStack>
+          <Progress value={uploadProgress} colorScheme="blue" size="lg" bg="rgba(255, 255, 255, 0.1)" />
+          <Text fontSize="sm" color="gray.300" mt={2}>
+            {Math.round(uploadProgress)}% complete
+          </Text>
+        </Box>
+      )}
+
+      {uploadedFiles.length > 0 && (
+        <Box width="100%" border="1px" borderColor="green.400" borderRadius="md" p={4} bg="rgba(34, 197, 94, 0.1)">
+          <Text fontWeight="semibold" mb={3} color="white">
+            Successfully uploaded files ({uploadedFiles.length})
+          </Text>
+          <List spacing={2} width="100%">
+            {uploadedFiles.map((file, index) => (
+              <ListItem key={index}>
+                <HStack
+                  p={3}
+                  bg="rgba(255, 255, 255, 0.1)"
+                  borderRadius="md"
+                  justifyContent="space-between"
+                  borderLeft="4px"
+                  borderLeftColor="green.400"
+                  _hover={{ bg: "rgba(255, 255, 255, 0.15)" }}
+                  transition="all 0.2s"
+                >
+                  <HStack>
+                    <Icon as={CheckIcon} color="green.400" />
+                    <Box>
+                      <Text fontWeight="medium" color="white">
+                        {file.name}
+                      </Text>
+                      <Text fontSize="sm" color="gray.300">
+                        {file.is_analyzed ? (
+                          `Analyzed: ${file.node_classes_count} node classes found`
+                        ) : file.analysis_error ? (
+                          `Analysis failed: ${file.analysis_error}`
+                        ) : (
+                          'Analysis in progress...'
+                        )}
+                      </Text>
+                    </Box>
+                  </HStack>
+                  <Text fontSize="sm" color="gray.300">
+                    {formatFileSize(file.file_size)}
+                  </Text>
                 </HStack>
               </ListItem>
             ))}
@@ -271,52 +452,67 @@ const BoxUpload: React.FC = () => {
 
       <VStack width="100%" spacing={5} align="start">
         <FormControl isRequired>
-          <FormLabel htmlFor="fileName">File name</FormLabel>
+          <FormLabel htmlFor="fileName" fontSize="sm" fontWeight="semibold" color="white">
+            File Name
+          </FormLabel>
           <Input 
             id="fileName" 
-            placeholder="File name ..."
+            placeholder="Enter file name (auto-filled from file)..."
             value={fileName}
             onChange={(e) => setFileName(e.target.value)}
+            disabled={isUploading}
+            borderColor="gray.300"
+            _hover={{ borderColor: "blue.300" }}
+            _focus={{ borderColor: "blue.500", boxShadow: "0 0 0 1px #3182ce" }}
           />
+          {selectedFiles.length > 1 && (
+            <Text fontSize="sm" color="gray.400" mt={1}>
+              When multiple files are selected, individual file names will be used
+            </Text>
+          )}
         </FormControl>
 
         <FormControl>
-          <FormLabel htmlFor="className">Class name</FormLabel>
-          <Input 
-            id="className" 
-            placeholder="Class name ..."
-            value={className}
-            onChange={(e) => setClassName(e.target.value)}
-          />
-        </FormControl>
-
-        <FormControl>
-          <FormLabel htmlFor="note">Note</FormLabel>
+          <FormLabel htmlFor="description" fontSize="sm" fontWeight="semibold" color="white">
+            Description (Optional)
+          </FormLabel>
           <Textarea
-            id="note"
-            placeholder="Note ..."
+            id="description"
+            placeholder="Describe your Python files..."
             rows={4}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            disabled={isUploading}
+            borderColor="gray.300"
+            _hover={{ borderColor: "blue.300" }}
+            _focus={{ borderColor: "blue.500", boxShadow: "0 0 0 1px #3182ce" }}
+            resize="vertical"
           />
         </FormControl>
       </VStack>
 
-      <Grid templateColumns="repeat(2, 1fr)" gap={4} width="100%" mt={4}>
-      <GridItem>
+      <Grid templateColumns="repeat(2, 1fr)" gap={4} width="100%" mt={6}>
+        <GridItem>
           <Button
             colorScheme="green"
             size="lg"
             width="100%"
             fontWeight="bold"
-            isDisabled={selectedFiles.length === 0 || !fileName.trim()}
+            isDisabled={selectedFiles.length === 0 || !fileName.trim() || isUploading}
             onClick={handleRegistration}
             boxShadow="sm"
-            variant="outline"
-            _hover={{ boxShadow: "md", transform: "translateY(-2px)" }}
+            color="white"
+            _hover={{ 
+              boxShadow: "md", 
+              transform: "translateY(-2px)",
+              bg: "green.600",
+              color: "white"
+            }}
+            _active={{ transform: "translateY(0)" }}
             transition="all 0.2s"
+            leftIcon={isUploading ? <Spinner size="sm" /> : undefined}
           >
-            Regist
+            {isUploading ? 'Uploading & Analyzing...' : 'Upload & Analyze'}
           </Button>
         </GridItem>
         <GridItem>
@@ -326,7 +522,12 @@ const BoxUpload: React.FC = () => {
             size="lg"
             width="100%"
             onClick={handleCancel}
-            _hover={{ bg: "red.50" }}
+            disabled={isUploading}
+            _hover={{ 
+              bg: "red.50",
+              borderColor: "red.300",
+              color: "red.600"
+            }}
           >
             Cancel
           </Button>

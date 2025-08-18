@@ -1,5 +1,10 @@
 from django.urls import path
-from .views import PythonFileUploadView, PythonFileListView, PythonFileContentView
+from .views import (
+    PythonFileUploadView,
+    PythonFileListView,
+    UploadedNodesView,
+    PythonFileCodeManagementView,
+)
 
 app_name = "box"
 
@@ -8,12 +13,13 @@ urlpatterns = [
     path("upload/", PythonFileUploadView.as_view(), name="python-file-upload"),
     # ファイル一覧
     path("files/", PythonFileListView.as_view(), name="python-file-list"),
-    # ファイル詳細
-    path("files/<int:pk>/", PythonFileListView.as_view(), name="python-file-detail"),
-    # ファイル内容の取得・更新
+    # ファイル詳細・削除
+    path("files/<uuid:pk>/", PythonFileListView.as_view(), name="python-file-detail"),
+    # アップロードされたノード一覧（フロントエンド用）
+    path("uploaded-nodes/", UploadedNodesView.as_view(), name="uploaded-nodes"),
     path(
-        "files/<int:pk>/content/",
-        PythonFileContentView.as_view(),
-        name="python-file-content",
+        "files/<str:filename>/code/",
+        PythonFileCodeManagementView.as_view(),
+        name="python-file-code",
     ),
 ]
