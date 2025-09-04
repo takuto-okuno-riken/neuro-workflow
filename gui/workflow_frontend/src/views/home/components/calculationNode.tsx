@@ -1,8 +1,21 @@
 import { Handle, NodeProps, Position } from "@xyflow/react";
 import { CalculationNodeData } from "../type";
-import { Badge, Box, Text } from "@chakra-ui/react";
+import { Badge, Box, Text, HStack, IconButton, Tooltip } from "@chakra-ui/react";
+import { ViewIcon, InfoIcon, DeleteIcon } from "@chakra-ui/icons";
 
-export const CalculationNode = ({ id, data, isConnectable, selected }: NodeProps<CalculationNodeData>) => {
+interface NodeCallbacks {
+  onJupyter?: (nodeId: string) => void;
+  onInfo?: (nodeId: string) => void;
+  onDelete?: (nodeId: string) => void;
+}
+
+export const CalculationNode = ({ 
+  id, 
+  data, 
+  isConnectable, 
+  selected,
+  ...callbacks 
+}: NodeProps<CalculationNodeData> & NodeCallbacks) => {
   const schema = data.schema || { inputs: {}, outputs: {} };
 
   console.log("これがスキーマデータ", schema);
@@ -44,6 +57,7 @@ export const CalculationNode = ({ id, data, isConnectable, selected }: NodeProps
       _hover={{ boxShadow: "lg", borderColor: "purple.400" }}
       position="relative"
       transition="all 0.2s"
+      role="group"
     >
       {/* ヘッダー */}
       <Box 
@@ -52,11 +66,86 @@ export const CalculationNode = ({ id, data, isConnectable, selected }: NodeProps
         p={2} 
         borderTopRadius="lg"
         fontWeight="bold"
-        textAlign="center"
         fontSize="sm"
         transition="all 0.2s"
       >
-        {data.label}
+        {/* ノード名（中央） */}
+        <Text fontSize="sm" fontWeight="bold" textAlign="center">
+          {data.label}
+        </Text>
+      </Box>
+      
+      {/* ボタン専用フィールド */}
+      <Box 
+        bg={selected ? "purple.100" : "gray.50"}
+        borderBottom="1px solid #e2e8f0"
+        px={2}
+        py={1}
+        display="flex"
+        justifyContent="center"
+        opacity={0.8}
+        _groupHover={{ opacity: 1 }}
+        transition="all 0.2s"
+      >
+        <HStack spacing={1}>
+          <Tooltip label="Open Jupyter" hasArrow>
+            <IconButton
+              aria-label="Open Jupyter"
+              size="xs"
+              variant="solid"
+              bg="orange.400"
+              color="white"
+              icon={<Text fontSize="9px" fontWeight="bold">JP</Text>}
+              onClick={(e) => {
+                e.stopPropagation();
+                callbacks.onJupyter?.(id);
+              }}
+              _hover={{ bg: "orange.500", transform: "scale(1.1)" }}
+              minW="18px"
+              h="18px"
+              borderRadius="sm"
+              boxShadow="sm"
+            />
+          </Tooltip>
+          <Tooltip label="Node Info" hasArrow>
+            <IconButton
+              aria-label="Node Info"
+              size="xs"
+              variant="solid"
+              bg="green.400"
+              color="white"
+              icon={<InfoIcon boxSize={2.5} />}
+              onClick={(e) => {
+                e.stopPropagation();
+                callbacks.onInfo?.(id);
+              }}
+              _hover={{ bg: "green.500", transform: "scale(1.1)" }}
+              minW="18px"
+              h="18px"
+              borderRadius="sm"
+              boxShadow="sm"
+            />
+          </Tooltip>
+          <Tooltip label="Delete Node" hasArrow>
+            <IconButton
+              aria-label="Delete Node"
+              size="xs"
+              variant="solid"
+              bg="red.400"
+              color="white"
+              icon={<DeleteIcon boxSize={2.5} />}
+              onClick={(e) => {
+                e.stopPropagation();
+                callbacks.onDelete?.(id);
+              }}
+              _hover={{ bg: "red.500", transform: "scale(1.1)" }}
+              minW="18px"
+              h="18px"
+              borderRadius="sm"
+              boxShadow="sm"
+            />
+          </Tooltip>
+        </HStack>
       </Box>
       
       {/* フィールド表示 */}

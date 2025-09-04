@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, useEffect } from 'react';
+import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -48,15 +48,12 @@ import {controlsStyle, minimapStyle} from './style';
 import { createAuthHeaders } from '../../api/authHeaders';
 import { useUploadedNodes } from '../../hooks/useUploadedNodes';
 import NodeDetailsContent from './components/nodeDetailModal';
-
-// nodeTypesをコンポーネント外で定義
-const nodeTypes = {
-  calculationNode: CalculationNode,
-};
+import JupyterModal from './components/jupyterModal';
+import useJupyterHub from '../../hooks/useJupyterHub';
 
 const HomeView = () => {
   const toast = useToast();
-  const { data: uploadedNodes, isLoading: isNodesLoading, error } = useUploadedNodes();
+  const { data: uploadedNodes, isLoading: isNodesLoading, error, refetch: refetchNodes } = useUploadedNodes();
   const reactFlowInstance = useRef<ReactFlowInstance | null>(null);
   const { isOpen: isCodeOpen, onOpen: onCodeOpen, onClose: onCodeClose } = useDisclosure();
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<CalculationNodeData>>([]);
@@ -64,6 +61,7 @@ const HomeView = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isGeneratingCode, setIsGeneratingCode] = useState<boolean>(false);
 
   // 自動保存関連の状態
   const [isConnected, setIsConnected] = useState<boolean>(true);
@@ -78,9 +76,302 @@ const HomeView = () => {
   const [edgeMenuPosition, setEdgeMenuPosition] = useState<{ x: number, y: number } | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
 
+  const { isOpen: isJupyterOpen, onOpen: onJupyterOpen, onClose: onJupyterClose } = useDisclosure();
   const { isOpen: isViewOpen, onOpen: onViewOpen, onClose: onViewClose } = useDisclosure();
   const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure();
   const [selectedNode, setSelectedNode] = useState<Node<CalculationNodeData> | null>(null);
+
+
+  const {
+  launchJupyter,
+  isLoading: isJupyterLoading,
+  isReady: isJupyterReady,
+  getError: getJupyterError,
+} = useJupyterHub({
+  baseUrl: 'http://localhost:8000',
+  apiEndpoint: '/api/jupyterhub',
+  isDevelopment: true  // 開発モード
+});
+
+  const handleOpenJupyter = useCallback(async () => {
+    if (!selectedProject) {
+      toast({
+        title: "No Project Selected",
+        description: "Please select a project first",
+        status: "warning",
+        duration: 2000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    // モーダルを開く
+    onJupyterOpen();
+    
+    // まだ起動していない場合は起動
+    if (!isJupyterReady(selectedProject)) {
+      await launchJupyter(selectedProject);
+    }
+  }, [selectedProject, onJupyterOpen, launchJupyter, isJupyterReady, toast]);
+
+  // JupyterModalが閉じられた時のハンドラー
+  const handleJupyterClose = useCallback(() => {
+    onJupyterClose();
+    // 必要に応じてセッションを閉じる
+    // if (selectedProject) {
+    //   closeJupyterSession(selectedProject);
+    // }
+  }, [onJupyterClose]);
+
+  // ノードのコールバック関数
+  const handleNodeJupyter = useCallback((nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (node) {
+      setSelectedNode(node);
+      onCodeOpen();
+    }
+  }, [nodes, onCodeOpen]);
+
+
+  const handleNodeInfo = useCallback((nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (node) {
+      setSelectedNode(node);
+      onViewOpen();
+    }
+  }, [nodes, onViewOpen]);
+
+  const handleNodeUpdate = useCallback((nodeId: string, updatedData: Partial<CalculationNodeData>) => {
+    setNodes((nds) => 
+      nds.map((node) => 
+        node.id === nodeId 
+          ? { ...node, data: { ...node.data, ...updatedData } }
+          : node
+      )
+    );
+    // selectedNodeも更新
+    setSelectedNode((prevNode) => 
+      prevNode?.id === nodeId 
+        ? { ...prevNode, data: { ...prevNode.data, ...updatedData } }
+        : prevNode
+    );
+  }, [setNodes]);
+
+  // 同一ファイル名のワークフローノードをすべて同期更新
+  const handleSyncWorkflowNodes = useCallback((filename: string, updatedSchema: SchemaFields) => {
+    console.log('Syncing all workflow nodes with file_name:', filename);
+    
+    setNodes((nds) => 
+      nds.map((node) => {
+        if (node.data.file_name === filename) {
+          console.log('Updating workflow node:', node.id, 'with new schema');
+          return { 
+            ...node, 
+            data: { 
+              ...node.data, 
+              schema: updatedSchema 
+            } 
+          };
+        }
+        return node;
+      })
+    );
+    
+    // selectedNodeも同期更新（一時ノードの場合も含む）
+    setSelectedNode((prevNode) => {
+      if (prevNode?.data.file_name === filename) {
+        console.log('Updating selected node schema:', prevNode.id);
+        return {
+          ...prevNode,
+          data: {
+            ...prevNode.data,
+            schema: updatedSchema
+          }
+        };
+      }
+      return prevNode;
+    });
+    
+    // 自動保存が有効な場合、APIにも反映
+    if (autoSaveEnabled && selectedProject) {
+      const nodesToUpdate = nodes.filter(node => node.data.file_name === filename);
+      nodesToUpdate.forEach(node => {
+        console.log('API sync for workflow node:', node.id);
+        updateNodeAPI(node.id, { 
+          position: node.position,
+          type: node.type,
+          data: {
+            ...node.data,
+            schema: updatedSchema
+          }
+        });
+      });
+    }
+  }, [setNodes, nodes, autoSaveEnabled, selectedProject]);
+
+  const handleRefreshNodeData = useCallback(async (filename: string) => {
+    try {
+      console.log('Refreshing node data for filename:', filename);
+      
+      const headers = await createAuthHeaders();
+      console.log('Auth headers created:', headers);
+      
+      const response = await fetch(`/api/box/uploaded-nodes/`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          ...headers,
+        },
+      });
+
+      console.log('Refresh response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Refresh API error:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('Refresh API result:', result);
+      
+      // filename でノードを検索
+      if (result.nodes && Array.isArray(result.nodes)) {
+        const refreshedNode = result.nodes.find((node: any) => node.file_name === filename);
+        console.log('Found refreshed node:', refreshedNode);
+        return refreshedNode;
+      }
+      
+      console.log('No nodes found in result or result.nodes is not an array');
+      return null;
+    } catch (error) {
+      console.error('Error refreshing node data:', error);
+      throw error;
+    }
+  }, []);
+
+  // サイドバーからのノード情報表示
+  const handleSidebarNodeInfo = useCallback((nodeData: any) => {
+    // ワークフロー内で同じfile_nameのノードを検索
+    const existingWorkflowNode = nodes.find(node => 
+      node.data.file_name === nodeData.file_name
+    );
+    
+    if (existingWorkflowNode) {
+      // ワークフロー内にノードが存在する場合はそれを使用
+      console.log('Found existing workflow node:', existingWorkflowNode.id);
+      setSelectedNode(existingWorkflowNode);
+    } else {
+      // ワークフロー内にノードが存在しない場合は一時的ノードを作成
+      console.log('Creating temporary node for sidebar view');
+      const tempNode = {
+        id: `sidebar_${nodeData.id}`,
+        data: {
+          label: nodeData.label,
+          schema: nodeData.schema,
+          file_name: nodeData.file_name
+        }
+      };
+      setSelectedNode(tempNode as any);
+    }
+    onViewOpen();
+  }, [nodes, onViewOpen]);
+
+  // サイドバーからのソースコード表示
+  const handleSidebarViewCode = useCallback((nodeData: any) => {
+    // ワークフロー内で同じfile_nameのノードを検索
+    const existingWorkflowNode = nodes.find(node => 
+      node.data.file_name === nodeData.file_name
+    );
+    
+    if (existingWorkflowNode) {
+      // ワークフロー内にノードが存在する場合はそれを使用
+      console.log('Found existing workflow node for code view:', existingWorkflowNode.id);
+      setSelectedNode(existingWorkflowNode);
+    } else {
+      // ワークフロー内にノードが存在しない場合は一時的ノードを作成
+      console.log('Creating temporary node for sidebar code view');
+      const tempNode = {
+        id: `sidebar_${nodeData.id}`,
+        data: {
+          label: nodeData.label,
+          schema: nodeData.schema,
+          file_name: nodeData.file_name
+        }
+      };
+      setSelectedNode(tempNode as any);
+    }
+    onCodeOpen();
+  }, [nodes, onCodeOpen]);
+
+  const handleNodeDelete = useCallback(async (nodeId: string) => {
+    try {
+      if (selectedProject && autoSaveEnabled) {
+        const headers = await createAuthHeaders();
+        await fetch(`/api/workflow/${selectedProject}/nodes/${nodeId}/`, {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: {
+            ...headers,
+          },
+        });
+      }
+      
+      setNodes((nds) => nds.filter((node) => node.id !== nodeId));
+      setEdges((eds) => {
+        const relatedEdges = eds.filter(
+          (edge) => edge.source === nodeId || edge.target === nodeId
+        );
+        
+        if (selectedProject && autoSaveEnabled) {
+          relatedEdges.forEach(async (edge) => {
+            const headers = await createAuthHeaders();
+            await fetch(`/api/workflow/${selectedProject}/edges/${edge.id}/`, {
+              method: 'DELETE',
+              credentials: 'include',
+              headers: {
+                ...headers,
+              },
+            });
+          });
+        }
+        
+        return eds.filter(
+          (edge) => edge.source !== nodeId && edge.target !== nodeId
+        );
+      });
+      
+      toast({
+        title: "Deleted",
+        description: `Node deleted`,
+        status: "info",
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error('Error deleting node:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete node",
+        status: "error",
+        duration: 2000,
+        isClosable: true,
+      });
+    }
+  }, [setNodes, setEdges, toast, autoSaveEnabled, selectedProject]);
+
+  // nodeTypes を useMemo で定義
+  const nodeTypes = useMemo(() => ({
+    calculationNode: (props: NodeProps<CalculationNodeData>) => (
+      <CalculationNode
+        {...props}
+        onJupyter={handleNodeJupyter}
+        onInfo={handleNodeInfo}
+        onDelete={handleNodeDelete}
+      />
+    )
+  }), [handleNodeJupyter, handleNodeInfo, handleNodeDelete]);
+
 
   // API通信用のヘルパー関数
   const createAuthHeadersLocal = async () => {
@@ -615,18 +906,26 @@ const HomeView = () => {
   );
 
 
+  // ノードクリック時のインフォメーション表示機能をコメントアウト
+  // const onNodeClick: NodeMouseHandler<Node<CalculationNodeData>> = useCallback((event, node) => {
+  //   event.preventDefault();
+  //   
+  //   setNodeMenuPosition({
+  //     x: event.clientX,
+  //     y: event.clientY,
+  //   });
+
+  //   console.log("クリックしたぞね", node)
+
+  //   setSelectedNodeId(node.id);
+  //   setSelectedNode(node);
+
+  //   onViewOpen();
+  // }, []);
+
   const onNodeClick: NodeMouseHandler<Node<CalculationNodeData>> = useCallback((event, node) => {
-    event.preventDefault();
-    
-    setNodeMenuPosition({
-      x: event.clientX,
-      y: event.clientY,
-    });
-
-    console.log("クリックしたぞね", node)
-
-    setSelectedNodeId(node.id);
-    setSelectedNode(node);
+    // ノード選択のみ行う（インフォメーション表示はアイコンボタンから）
+    console.log("Node clicked:", node.id);
   }, []);
 
   const onEdgeClick: EdgeMouseHandler = useCallback((event, edge) => {
@@ -654,6 +953,11 @@ const HomeView = () => {
   // キーボードイベントハンドラー（削除処理）
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // モーダルが開いている時は削除処理を無効化
+      if (isViewOpen || isCodeOpen || isJupyterOpen) {
+        return;
+      }
+      
       if (event.key === 'Delete' || event.key === 'Backspace') {
         const selectedEdges = edges.filter(edge => edge.selected);
         if (selectedEdges.length > 0) {
@@ -712,7 +1016,7 @@ const HomeView = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [nodes, edges, setNodes, setEdges, toast, autoSaveEnabled]);
+  }, [nodes, edges, setNodes, setEdges, toast, autoSaveEnabled, isViewOpen, isCodeOpen, isJupyterOpen]);
 
   // ノード削除処理（メニューから）
   const handleDeleteNode = useCallback(() => {
@@ -963,6 +1267,19 @@ const HomeView = () => {
         createNodeAPI(newNode);
       }
       
+      // ノード作成後、最新のスキーマで更新
+      if (fileName) {
+        console.log('Refreshing newly created node with latest schema:', fileName);
+        handleRefreshNodeData(fileName).then((refreshedData) => {
+          if (refreshedData && refreshedData.schema) {
+            console.log('Updating newly created node with fresh schema');
+            handleNodeUpdate(newNodeId, { schema: refreshedData.schema });
+          }
+        }).catch((error) => {
+          console.error('Failed to refresh newly created node:', error);
+        });
+      }
+      
       // カウント計算（新しい構造に対応）
       const inputCount = schema.inputs ? Object.keys(schema.inputs).length : 0;
       const outputCount = schema.outputs ? Object.keys(schema.outputs).length : 0;
@@ -975,7 +1292,7 @@ const HomeView = () => {
         isClosable: true,
       });
     },
-    [setNodes, toast, selectedProject, autoSaveEnabled, uploadedNodes]
+    [setNodes, toast, selectedProject, autoSaveEnabled, uploadedNodes, handleRefreshNodeData, handleNodeUpdate]
   );
 
   const onDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
@@ -988,7 +1305,72 @@ const HomeView = () => {
   }, []);
 
 
-  const handleViewCode = useCallback(() => {
+  // フロー全体をJSONとして出力
+  const handleExportFlowJSON = useCallback(() => {
+    if (!reactFlowInstance.current) {
+      toast({
+        title: "Error",
+        description: "Flow instance not ready",
+        status: "error",
+        duration: 2000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    try {
+      // React FlowのtoObject()メソッドを使用してフロー全体を取得
+      const flowData = reactFlowInstance.current.toObject();
+      
+      // プロジェクト情報も含める
+      const exportData = {
+        project: {
+          id: selectedProject,
+          name: projects.find(p => p.id === selectedProject)?.name || 'Unknown',
+          exportedAt: new Date().toISOString()
+        },
+        flow: flowData
+      };
+
+      // JSONファイルとしてダウンロード
+      const jsonString = JSON.stringify(exportData, null, 2);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      const projectName = projects.find(p => p.id === selectedProject)?.name || 'flow';
+      const filename = `${projectName}_flow_${new Date().toISOString().split('T')[0]}.json`;
+      
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Export Complete",
+        description: `Flow exported as ${filename}`,
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+      
+      console.log('Exported flow data:', exportData);
+    } catch (error) {
+      console.error('Failed to export flow:', error);
+      toast({
+        title: "Export Error",
+        description: "Failed to export flow data",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  }, [reactFlowInstance, selectedProject, projects, toast]);
+
+  // コード生成（フロー全体）
+  const handleGenerateCode = useCallback(async () => {
     if (!selectedProject) {
       toast({
         title: "No Project Selected",
@@ -999,8 +1381,100 @@ const HomeView = () => {
       });
       return;
     }
-    onCodeOpen();
-  }, [selectedProject, onCodeOpen, toast]);
+
+    if (!reactFlowInstance.current) {
+      toast({
+        title: "Flow Not Ready",
+        description: "Flow instance is not ready, please wait",
+        status: "warning",
+        duration: 2000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    if (nodes.length === 0) {
+      toast({
+        title: "Empty Flow",
+        description: "Please add nodes to the flow before generating code",
+        status: "warning",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setIsGeneratingCode(true);
+
+    // ローディング状態を示すトースト
+    const loadingToast = toast({
+      title: "Generating Code...",
+      description: "Please wait while we generate the code",
+      status: "loading",
+      duration: null,
+      isClosable: false,
+    });
+
+    try {
+      if (!reactFlowInstance.current) {
+        toast.close(loadingToast);
+        throw new Error('Flow instance not ready');
+      }
+
+      // React Flowのフローデータを取得
+      const flowData = reactFlowInstance.current.toObject();
+      console.log('Sending flow data to API:', flowData);
+
+      const headers = await createAuthHeaders();
+      const response = await fetch(`/api/workflow/${selectedProject}/generate-code/`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          nodes: flowData.nodes,
+          edges: flowData.edges,
+          project_id: selectedProject
+        }),
+      });
+
+      // ローディングトーストを閉じる
+      toast.close(loadingToast);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`HTTP ${response.status}: ${errorData.error || 'Failed to generate code'}`);
+      }
+
+      const result = await response.json();
+      console.log('Code generation result:', result);
+
+      toast({
+        title: "Code Generated Successfully! ✅",
+        description: result.message || "Code has been generated and is ready to use",
+        status: "success",
+        duration: 5000,
+        isClosable: true,
+      });
+
+    } catch (error) {
+      // ローディングトーストを閉じる（エラー時）
+      toast.close(loadingToast);
+      
+      console.error('Code generation error:', error);
+      toast({
+        title: "Code Generation Failed ❌",
+        description: `Failed to generate code: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setIsGeneratingCode(false);
+    }
+  }, [selectedProject, reactFlowInstance, nodes.length, toast]);
 
 
   // クリーンアップ
@@ -1017,7 +1491,10 @@ const HomeView = () => {
       <SideBoxArea 
         nodes={uploadedNodes} 
         isLoading={isNodesLoading}  // ノード専用
-        error={error} 
+        error={error}
+        onRefresh={refetchNodes}
+        onNodeInfo={handleSidebarNodeInfo}
+        onViewCode={handleSidebarViewCode}
       />
       <div style={{ width: '98.5vw', height: '92vh', marginLeft: '300px', position: 'relative' }}>
         <style>
@@ -1124,8 +1601,10 @@ const HomeView = () => {
               colorScheme="purple"
               variant="outline"
               size="sm"
-              onClick={handleViewCode}
+              onClick={handleOpenJupyter}  
               isDisabled={!selectedProject}
+              isLoading={selectedProject ? isJupyterLoading(selectedProject) : false}
+              loadingText="Starting..."
               _hover={{ bg: "purple.50", transform: "translateY(-1px)" }}
               _disabled={{ 
                 opacity: 0.4,
@@ -1133,8 +1612,57 @@ const HomeView = () => {
               }}
               transition="all 0.2s"
             >
-              {selectedProject ? "🚀 View Generated Code" : "Select Project First"}
+              {selectedProject ? "🚀 Open JupyterLab" : "Select Project First"}
             </Button>
+            
+            <Button
+              colorScheme="blue"
+              variant="solid"
+              size="sm"
+              onClick={handleGenerateCode}
+              isDisabled={!selectedProject || nodes.length === 0}
+              isLoading={isGeneratingCode}
+              loadingText="Generating..."
+              _hover={{ bg: "blue.600", transform: "translateY(-1px)" }}
+              _disabled={{ 
+                opacity: 0.4,
+                cursor: "not-allowed"
+              }}
+              transition="all 0.2s"
+            >
+              {!selectedProject ? "Select Project First" : 
+               nodes.length === 0 ? "Add Nodes to Generate" : 
+               "📝 Generate Code"}
+            </Button>
+            
+            <Button
+              colorScheme="green"
+              variant="outline"
+              size="sm"
+              onClick={handleExportFlowJSON}
+              isDisabled={!selectedProject || nodes.length === 0}
+              _hover={{ bg: "green.50", transform: "translateY(-1px)" }}
+              _disabled={{ 
+                opacity: 0.4,
+                cursor: "not-allowed"
+              }}
+              transition="all 0.2s"
+            >
+              {nodes.length === 0 ? "No Flow to Export" : "📋 Export Flow JSON"}
+            </Button>
+            
+            {/* JupyterHubの状態表示 */}
+            {selectedProject && isJupyterReady(selectedProject) && (
+              <Text fontSize="xs" color="green.500" textAlign="center">
+                ✅ JupyterLab Ready
+              </Text>
+            )}
+            
+            {selectedProject && getJupyterError(selectedProject) && (
+              <Text fontSize="xs" color="red.500" textAlign="center">
+                ❌ Launch Error
+              </Text>
+            )}
             
             {selectedProject && (
               <Text fontSize="xs" color="gray.500" textAlign="center">
@@ -1214,8 +1742,12 @@ const HomeView = () => {
             <ModalHeader>Node Details: {selectedNode?.data.label}</ModalHeader>
             <ModalCloseButton />
             <ModalBody marginTop={5}>
-              {/* ここに新しいコンポーネントを入れる */}
-              <NodeDetailsContent  nodeData={selectedNode}/>
+              <NodeDetailsContent 
+                nodeData={selectedNode} 
+                onNodeUpdate={handleNodeUpdate}
+                onRefreshNodeData={handleRefreshNodeData}
+                onSyncWorkflowNodes={handleSyncWorkflowNodes}
+              />
             </ModalBody>
             <ModalFooter>
               <Button variant="ghost" onClick={onViewClose}>Close</Button>
@@ -1224,17 +1756,28 @@ const HomeView = () => {
         </Modal>
 
 
+        <JupyterModal
+          isOpen={isJupyterOpen}
+          onClose={handleJupyterClose}
+          projectId={selectedProject}
+          title="Jupyter Lab - Workflow Editor"
+          jupyterBaseUrl="http://localhost:8000"
+        />
+
+        {/* Code Editor Modal */}
         <CodeEditorModal
           isOpen={isCodeOpen}
           onClose={onCodeClose}
-          identifier={selectedProject}
+          identifier={selectedNode?.data.file_name || ''}
           endpoints={{
-            getCode: '/workflow/{identifier}/code/',
-            saveCode: '/workflow/{identifier}/code/',
-            executeCode: '/workflow/{identifier}/execute/'
+            baseUrl: 'http://localhost:3000/api/box',
+            getCode: '/files/{identifier}/code/',
+            saveCode: '/files/{identifier}/code/',
           }}
-          title="Workflow Editor"
-          showExecute={true}
+          title={selectedNode ? `Code: ${selectedNode.data.label}` : 'Code Editor'}
+          downloadFileName={selectedNode?.data.file_name || 'code.py'}
+          showExecute={false}
+          language="python"
         />
       </div>
     </HStack>

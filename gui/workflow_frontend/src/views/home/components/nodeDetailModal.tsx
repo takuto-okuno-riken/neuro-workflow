@@ -9,19 +9,170 @@ import {
   Flex,
   Button,
   Tooltip,
+  Input,
+  IconButton,
+  useToast,
 } from '@chakra-ui/react';
 import { ViewIcon, ExternalLinkIcon } from '@chakra-ui/icons';
+import { EditIcon, CheckIcon, CloseIcon } from '@chakra-ui/icons';
 import { CalculationNodeData, SchemaFields } from '../type';
 import { Node } from '@xyflow/react';
-import { CodeEditorModal } from './codeEditorModal'; // インポートパスは調整してください
+
+interface NodeDetailsContentProps {
+  nodeData: Node<CalculationNodeData> | null;
+  onNodeUpdate?: (nodeId: string, updatedData: Partial<CalculationNodeData>) => void;
+  onRefreshNodeData?: (filename: string) => Promise<any>;
+  onSyncWorkflowNodes?: (filename: string, updatedSchema: SchemaFields) => void;
+}
 
 const OpenJupyter = (filename : string) => {
-    /*window.open("http://localhost:8888/lab/tree//home/gen/oist/workflow/hiyoko/workflow_backend/django-project/media/python_files/Sample2NetworkNode.py?token=oistworkflow1234", "_blank");*/
-    window.open("http://localhost:8888/lab/tree/media/python_files/"+filename+".py?token=oistworkflow1234", "_blank");
+    window.open("http://localhost:8000/user/user1/lab/workspaces/auto-E/tree/upload_nodes/"+filename+".py", "_blank");
   };
 
-const NodeDetailsContent: React.FC<{ nodeData: Node<CalculationNodeData> | null }> = ({ nodeData }) => {
-  const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
+const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNodeUpdate, onRefreshNodeData, onSyncWorkflowNodes }) => {
+  const [editingParam, setEditingParam] = useState<string | null>(null);
+  const [editingField, setEditingField] = useState<'default_value' | 'constraints' | null>(null);
+  const [editValue, setEditValue] = useState<string>('');
+  const toast = useToast();
+
+  // パラメータの更新API呼び出し
+  const updateParameter = async (parameterKey: string, parameterValue: any, parameterField: 'default_value' | 'constraints') => {
+    try {
+      const response = await fetch('/api/box/parameters/update/', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          parameter_key: parameterKey,
+          parameter_field: parameterField,
+          parameter_value: parameterValue,
+          filename: nodeData.data.file_name
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // DBから最新データを再取得またはローカル状態を更新
+      if (nodeData && onNodeUpdate) {
+        console.log('Starting post-update refresh process for node:', nodeData.id);
+        console.log('onRefreshNodeData available:', !!onRefreshNodeData);
+        
+        let updatedSchema: SchemaFields;
+        
+        if (onRefreshNodeData) {
+          try {
+            console.log('Attempting to refresh data for file:', nodeData.data.file_name);
+            const refreshedData = await onRefreshNodeData(nodeData.data.file_name);
+            console.log('Refresh result:', refreshedData);
+            
+            if (refreshedData && refreshedData.schema) {
+              console.log('Updating node with refreshed schema:', refreshedData.schema);
+              updatedSchema = refreshedData.schema;
+              onNodeUpdate(nodeData.id, { schema: updatedSchema });
+            } else {
+              console.log('No refreshed data returned, using fallback local update');
+              // 再取得に失敗した場合のフォールバック
+              updatedSchema = { ...nodeData.data.schema };
+              if (updatedSchema.parameters && updatedSchema.parameters[parameterKey]) {
+                updatedSchema.parameters[parameterKey] = {
+                  ...updatedSchema.parameters[parameterKey],
+                  [parameterField]: parameterValue
+                };
+                onNodeUpdate(nodeData.id, { schema: updatedSchema });
+              }
+            }
+          } catch (error) {
+            console.error('Failed to refresh node data:', error);
+            console.log('Using fallback local update due to refresh error');
+            // エラー時のフォールバック: ローカルの状態を更新
+            updatedSchema = { ...nodeData.data.schema };
+            if (updatedSchema.parameters && updatedSchema.parameters[parameterKey]) {
+              updatedSchema.parameters[parameterKey] = {
+                ...updatedSchema.parameters[parameterKey],
+                [parameterField]: parameterValue
+              };
+              onNodeUpdate(nodeData.id, { schema: updatedSchema });
+            }
+          }
+        } else {
+          console.log('onRefreshNodeData not available, using local update');
+          // onRefreshNodeDataが提供されていない場合、ローカル状態を更新
+          updatedSchema = { ...nodeData.data.schema };
+          if (updatedSchema.parameters && updatedSchema.parameters[parameterKey]) {
+            updatedSchema.parameters[parameterKey] = {
+              ...updatedSchema.parameters[parameterKey],
+              [parameterField]: parameterValue
+            };
+            onNodeUpdate(nodeData.id, { schema: updatedSchema });
+          }
+        }
+        
+        // ワークフロー内の同一ファイルノードも同期更新
+        if (onSyncWorkflowNodes && updatedSchema) {
+          console.log('Syncing workflow nodes with same file_name:', nodeData.data.file_name);
+          onSyncWorkflowNodes(nodeData.data.file_name, updatedSchema);
+        }
+      }
+
+      toast({
+        title: "Success",
+        description: `Parameter ${parameterField} updated successfully`,
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error updating parameter:', error);
+      toast({
+        title: "Error",
+        description: `Failed to update parameter: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+      return false;
+    }
+  };
+
+  // 編集開始
+  const startEditing = (paramKey: string, field: 'default_value' | 'constraints', currentValue: any) => {
+    setEditingParam(paramKey);
+    setEditingField(field);
+    setEditValue(typeof currentValue === 'string' ? currentValue : JSON.stringify(currentValue));
+  };
+
+  // 編集保存
+  const saveEdit = async () => {
+    if (!editingParam || !editingField) return;
+
+    let parsedValue: any;
+    try {
+      // JSONとして解析を試行、失敗したら文字列として扱う
+      parsedValue = JSON.parse(editValue);
+    } catch {
+      parsedValue = editValue;
+    }
+
+    const success = await updateParameter(editingParam, parsedValue, editingField);
+    if (success) {
+      // 編集状態をクリア
+      setEditingParam(null);
+      setEditingField(null);
+      setEditValue('');
+    }
+  };
+
+  // 編集キャンセル
+  const cancelEdit = () => {
+    setEditingParam(null);
+    setEditingField(null);
+    setEditValue('');
+  };
 
   if (!nodeData) {
     return (
@@ -76,6 +227,12 @@ const NodeDetailsContent: React.FC<{ nodeData: Node<CalculationNodeData> | null 
     return String(data);
   };
 
+    // ノードのファイル名を取得（nodeData.data.filenameまたはnodeData.data.sourceFileなど、実際の構造に合わせて調整）
+  const getNodeFileName = () => {
+    // 以下は例です。実際のデータ構造に合わせて調整してください
+    return nodeData.data.file_name;
+  };
+
   const renderParametersSection = () => {
     if (!schema.parameters || Object.keys(schema.parameters).length === 0) {
       return (
@@ -112,25 +269,104 @@ const NodeDetailsContent: React.FC<{ nodeData: Node<CalculationNodeData> | null 
               )}
               
               <VStack align="stretch" spacing={2}>
+                {/* Default Value - 編集可能 */}
                 {param.default_value !== undefined && (
-                  <HStack>
+                  <HStack align="start" spacing={2}>
                     <Text fontSize="xs" color="gray.400" minW="80px">default_value:</Text>
-                    <Code colorScheme="gray" fontSize="xs" bg="gray.600" color="white">
-                      {typeof param.default_value === 'string' 
-                        ? `"${param.default_value}"` 
-                        : String(param.default_value)}
-                    </Code>
+                    {editingParam === key && editingField === 'default_value' ? (
+                      <HStack flex="1" spacing={1}>
+                        <Input
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          size="xs"
+                          bg="gray.600"
+                          color="white"
+                          fontSize="xs"
+                        />
+                        <IconButton
+                          aria-label="Save"
+                          icon={<CheckIcon />}
+                          size="xs"
+                          colorScheme="green"
+                          onClick={saveEdit}
+                        />
+                        <IconButton
+                          aria-label="Cancel"
+                          icon={<CloseIcon />}
+                          size="xs"
+                          colorScheme="red"
+                          onClick={cancelEdit}
+                        />
+                      </HStack>
+                    ) : (
+                      <HStack flex="1" spacing={1}>
+                        <Code colorScheme="gray" fontSize="xs" bg="gray.600" color="white" flex="1">
+                          {typeof param.default_value === 'string' 
+                            ? `"${param.default_value}"` 
+                            : String(param.default_value)}
+                        </Code>
+                        <Tooltip label="Edit default value" hasArrow>
+                          <IconButton
+                            aria-label="Edit default value"
+                            icon={<EditIcon />}
+                            size="xs"
+                            colorScheme="blue"
+                            variant="ghost"
+                            onClick={() => startEditing(key, 'default_value', param.default_value)}
+                          />
+                        </Tooltip>
+                      </HStack>
+                    )}
                   </HStack>
                 )}
                 
-                {param.constraints && (
-                  <HStack align="start">
-                    <Text fontSize="xs" color="gray.400" minW="80px">constraints:</Text>
-                    <Code colorScheme="blue" fontSize="xs" bg="blue.600" color="white">
-                      {formatDataForDisplay(param.constraints)}
-                    </Code>
-                  </HStack>
-                )}
+                {/* Constraints - 編集可能 */}
+                <HStack align="start" spacing={2}>
+                  <Text fontSize="xs" color="gray.400" minW="80px">constraints:</Text>
+                  {editingParam === key && editingField === 'constraints' ? (
+                    <HStack flex="1" spacing={1}>
+                      <Input
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        size="xs"
+                        bg="gray.600"
+                        color="white"
+                        fontSize="xs"
+                        placeholder="Enter constraints (JSON format)"
+                      />
+                      <IconButton
+                        aria-label="Save"
+                        icon={<CheckIcon />}
+                        size="xs"
+                        colorScheme="green"
+                        onClick={saveEdit}
+                      />
+                      <IconButton
+                        aria-label="Cancel"
+                        icon={<CloseIcon />}
+                        size="xs"
+                        colorScheme="red"
+                        onClick={cancelEdit}
+                      />
+                    </HStack>
+                  ) : (
+                    <HStack flex="1" spacing={1}>
+                      <Code colorScheme="blue" fontSize="xs" bg="blue.600" color="white" flex="1">
+                        {param.constraints ? formatDataForDisplay(param.constraints) : 'None'}
+                      </Code>
+                      <Tooltip label="Edit constraints" hasArrow>
+                        <IconButton
+                          aria-label="Edit constraints"
+                          icon={<EditIcon />}
+                          size="xs"
+                          colorScheme="blue"
+                          variant="ghost"
+                          onClick={() => startEditing(key, 'constraints', param.constraints || '')}
+                        />
+                      </Tooltip>
+                    </HStack>
+                  )}
+                </HStack>
               </VStack>
             </VStack>
           </Box>
@@ -232,11 +468,6 @@ const NodeDetailsContent: React.FC<{ nodeData: Node<CalculationNodeData> | null 
     );
   };
 
-  // ノードのファイル名を取得（nodeData.data.filenameまたはnodeData.data.sourceFileなど、実際の構造に合わせて調整）
-  const getNodeFileName = () => {
-    // 以下は例です。実際のデータ構造に合わせて調整してください
-    return nodeData.data.file_name;
-  };
 
   return (
     <>
@@ -253,7 +484,6 @@ const NodeDetailsContent: React.FC<{ nodeData: Node<CalculationNodeData> | null 
                   Node ID: {nodeData.id}
                 </Text>
               </VStack>
-              
               {/* View Code Button */}
               <HStack spacing={2}>
                 <Tooltip label="View source code for this node" placement="left">
@@ -361,21 +591,6 @@ const NodeDetailsContent: React.FC<{ nodeData: Node<CalculationNodeData> | null 
         </VStack>
       </Box>
 
-      {/* Code Editor Modal */}
-      <CodeEditorModal
-        isOpen={isCodeModalOpen}
-        onClose={() => setIsCodeModalOpen(false)}
-        identifier={getNodeFileName()}
-        endpoints={{
-          baseUrl: 'http://localhost:3000/api/box', // 必要に応じて調整
-          getCode: '/files/{identifier}/code/',
-          saveCode: '/files/{identifier}/code/',
-        }}
-        title={`Code: ${nodeData.data.label}`}
-        downloadFileName={getNodeFileName()}
-        showExecute={false} // ノードのコードは実行しない
-        language="python"
-      />
     </>
   );
 };

@@ -10,16 +10,39 @@ import {
   Spinner,
   Alert,
   AlertIcon,
+  IconButton,
+  HStack,
+  useToast,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  ModalCloseButton,
+  Input,
+  Button,
+  useDisclosure,
+  AlertDialog,
+  AlertDialogOverlay,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogBody,
+  AlertDialogFooter,
 } from '@chakra-ui/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { IconType } from 'react-icons';
-import { FiBox } from 'react-icons/fi'; // デフォルトアイコンとして使用
+import { FiBox, FiCopy, FiTrash2, FiInfo, FiCode } from 'react-icons/fi'; // デフォルトアイコンとして使用
 import { SchemaFields } from '../home/type';
+import { createAuthHeaders } from '../../api/authHeaders';
 
 interface SidebarProps {
   nodes: UploadedNodesResponse | null;
   isLoading?: boolean;
   error?: string;
+  onRefresh?: () => Promise<void>;
+  onNodeInfo?: (node: BackendNodeType) => void;
+  onViewCode?: (node: BackendNodeType) => void;
 }
 
 // バックエンドのレスポンス型に合わせて定義
@@ -45,9 +68,19 @@ interface NodeTypeWithIcon extends Omit<BackendNodeType, 'icon'> {
   icon: IconType;
 }
 
-const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error }) => {
+const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error, onRefresh, onNodeInfo, onViewCode }) => {
   const [searchResult, setSearchResult] = useState<string>('');
   const [filteredNodes, setFilteredNodes] = useState<NodeTypeWithIcon[]>([]);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [isCopying, setIsCopying] = useState<string | null>(null);
+  const [copyFileName, setCopyFileName] = useState<string>('');
+  const [nodeToAction, setNodeToAction] = useState<NodeTypeWithIcon | null>(null);
+  const toast = useToast();
+
+  // ダイアログ管理
+  const { isOpen: isCopyModalOpen, onOpen: onCopyModalOpen, onClose: onCopyModalClose } = useDisclosure();
+  const { isOpen: isDeleteAlertOpen, onOpen: onDeleteAlertOpen, onClose: onDeleteAlertClose } = useDisclosure();
+  const cancelRef = useRef<HTMLButtonElement>(null);
 
   console.log("サイドボックスエリア", filteredNodes)
   
@@ -110,6 +143,176 @@ const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error }
     event.dataTransfer.setData('application/reactflow', node.type);
     event.dataTransfer.setData('application/nodedata', JSON.stringify(dragData));
     event.dataTransfer.effectAllowed = 'move';
+  };
+
+  // 削除確認ダイアログを開く
+  const openDeleteDialog = (node: NodeTypeWithIcon) => {
+    if (!node.file_id) {
+      toast({
+        title: "Error",
+        description: "No file ID available for deletion",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setNodeToAction(node);
+    onDeleteAlertOpen();
+  };
+
+  // 削除実行
+  const handleDeleteNode = async () => {
+    if (!nodeToAction) return;
+
+    setIsDeleting(nodeToAction.file_id);
+    
+    try {
+      const headers = await createAuthHeaders();
+      const response = await fetch(`/api/box/files/${nodeToAction.file_id}/`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          ...headers,
+        },
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Deleted",
+          description: `Node "${nodeToAction.label}" deleted successfully`,
+          status: "success",
+          duration: 3000,
+          isClosable: true,
+        });
+        
+        onDeleteAlertClose();
+        // Refresh the nodes list
+        if (onRefresh) {
+          await onRefresh();
+        }
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete node');
+      }
+    } catch (error) {
+      console.error('Error deleting node:', error);
+      toast({
+        title: "Error",
+        description: `Failed to delete node: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setIsDeleting(null);
+    }
+  };
+
+  // コピーダイアログを開く
+  const openCopyDialog = (node: NodeTypeWithIcon) => {
+    if (!node.file_name) {
+      toast({
+        title: "Error",
+        description: "No file name available for copying",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setNodeToAction(node);
+    // デフォルトファイル名を設定（拡張子を除去してコピー接尾辞を追加）
+    const baseName = node.file_name.replace(/\.py$/, '');
+    setCopyFileName(`${baseName}_copy`);
+    onCopyModalOpen();
+  };
+
+  // コピー実行
+  const handleCopyNode = async () => {
+    if (!nodeToAction || !copyFileName.trim()) {
+      toast({
+        title: "Error",
+        description: "File name is required",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setIsCopying(nodeToAction.file_id);
+    
+    try {
+      const headers = await createAuthHeaders();
+      const requestBody = {
+        source_filename: nodeToAction.file_name,
+        target_filename: copyFileName.trim()
+      };
+      
+      console.log('Copy request details:', {
+        url: '/api/box/copy/',
+        method: 'POST',
+        body: requestBody,
+      });
+      
+      const response = await fetch('/api/box/copy/', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log('Copy response status:', response.status);
+
+      if (response.ok) {
+        const responseData = await response.json();
+        toast({
+          title: "Copied",
+          description: `Node "${nodeToAction.label}" copied as "${copyFileName}"`,
+          status: "success",
+          duration: 3000,
+          isClosable: true,
+        });
+        
+        console.log('Copy response data:', responseData);
+        onCopyModalClose();
+        // Refresh the nodes list to show the new copied node
+        if (onRefresh) {
+          await onRefresh();
+        }
+      } else {
+        let errorData;
+        const contentType = response.headers.get('content-type');
+        
+        if (contentType && contentType.includes('application/json')) {
+          errorData = await response.json();
+          console.error('Copy error (JSON):', errorData);
+        } else {
+          const textData = await response.text();
+          console.error('Copy error (Text):', textData);
+          errorData = { error: `HTTP ${response.status}: ${textData || 'Failed to copy node'}` };
+        }
+        
+        throw new Error(errorData.error || `HTTP ${response.status}: Failed to copy node`);
+      }
+    } catch (error) {
+      console.error('Error copying node:', error);
+      toast({
+        title: "Error",
+        description: `Failed to copy node: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setIsCopying(null);
+    }
   };
 
   const nodesByCategory = filteredNodes.reduce((acc, node) => {
@@ -219,7 +422,6 @@ const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error }
                         {categoryNodes.map((node) => (
                           <Box
                             key={node.id}
-                            p={3}
                             bg="gray.800"
                             borderRadius="md"
                             border="1px solid"
@@ -233,33 +435,153 @@ const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error }
                             }}
                             onDragStart={(event) => onDragStart(event, node)}
                             draggable
+                            overflow="hidden"
                           >
-                            <Box display="flex" alignItems="center" mb={2}>
-                              <Icon 
-                                as={node.icon} 
-                                boxSize={5} 
-                                color="blue.400" 
-                                mr={2}
-                              />
-                              <Box flex={1}>
-                                <Text fontWeight="bold" fontSize="sm">
-                                  {node.label}
-                                </Text>
-                                <Text fontSize="xs" color="gray.500">
-                                  from {node.file_name}
-                                </Text>
+                            {/* ヘッダー部分 */}
+                            <Box
+                              bg="gray.750"
+                              px={3}
+                              borderBottom="1px solid"
+                              borderColor="gray.600"
+                              onDragStart={(e) => e.stopPropagation()}
+                              onDrag={(e) => e.stopPropagation()}
+                              draggable={false}
+                            >
+                              {/* アクションボタンエリア */}
+                              <Box py={1} display="flex" justifyContent="flex-end">
+                                <HStack spacing={1}>
+                                  <IconButton
+                                    aria-label="View source code"
+                                    icon={<FiCode />}
+                                    size="xs"
+                                    variant="ghost"
+                                    color="gray.400"
+                                    _hover={{ 
+                                      color: "purple.300",
+                                      bg: "purple.700" 
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      e.preventDefault();
+                                      onViewCode?.(node);
+                                    }}
+                                    onMouseDown={(e) => {
+                                      e.stopPropagation();
+                                    }}
+                                    onDragStart={(e) => {
+                                      e.stopPropagation();
+                                      e.preventDefault();
+                                    }}
+                                    draggable={false}
+                                  />
+                                  <IconButton
+                                    aria-label="Node information"
+                                    icon={<FiInfo />}
+                                    size="xs"
+                                    variant="ghost"
+                                    color="gray.400"
+                                    _hover={{ 
+                                      color: "green.300",
+                                      bg: "green.700" 
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      e.preventDefault();
+                                      onNodeInfo?.(node);
+                                    }}
+                                    onMouseDown={(e) => {
+                                      e.stopPropagation();
+                                    }}
+                                    onDragStart={(e) => {
+                                      e.stopPropagation();
+                                      e.preventDefault();
+                                    }}
+                                    draggable={false}
+                                  />
+                                  <IconButton
+                                    aria-label="Copy node"
+                                    icon={<FiCopy />}
+                                    size="xs"
+                                    variant="ghost"
+                                    color="gray.400"
+                                    _hover={{ 
+                                      color: "blue.300",
+                                      bg: "blue.700" 
+                                    }}
+                                    isLoading={isCopying === node.file_id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      e.preventDefault();
+                                      openCopyDialog(node);
+                                    }}
+                                    onMouseDown={(e) => {
+                                      e.stopPropagation();
+                                    }}
+                                    onDragStart={(e) => {
+                                      e.stopPropagation();
+                                      e.preventDefault();
+                                    }}
+                                    draggable={false}
+                                  />
+                                  <IconButton
+                                    aria-label="Delete node"
+                                    icon={<FiTrash2 />}
+                                    size="xs"
+                                    variant="ghost"
+                                    color="gray.400"
+                                    _hover={{ 
+                                      color: "red.300",
+                                      bg: "red.700" 
+                                    }}
+                                    isLoading={isDeleting === node.file_id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      e.preventDefault();
+                                      openDeleteDialog(node);
+                                    }}
+                                    onMouseDown={(e) => {
+                                      e.stopPropagation();
+                                    }}
+                                    onDragStart={(e) => {
+                                      e.stopPropagation();
+                                      e.preventDefault();
+                                    }}
+                                    draggable={false}
+                                  />
+                                </HStack>
+                              </Box>
+
+                              {/* タイトルエリア */}
+                              <Box pb={2}>
+                                <HStack alignItems="center" spacing={2}>
+                                  <Icon 
+                                    as={node.icon} 
+                                    boxSize={4} 
+                                    color="blue.400"
+                                  />
+                                  <Text fontWeight="bold" fontSize="sm" color="white">
+                                    {node.label}
+                                  </Text>
+                                </HStack>
                               </Box>
                             </Box>
-                            <Text fontSize="xs" color="gray.400" mb={2}>
-                              {node.description}
-                            </Text>
-                            {node.schema && (Object.keys(node.schema.outputs).length  > 0 || Object.keys(node.schema.inputs).length  > 0) && (
-                              <Box>
-                                <Text fontSize="xs" color="gray.500" mb={1}>
-                                  Ports: {Object.keys(node.schema.inputs).length}in / {Object.keys(node.schema.outputs).length}out
-                                </Text>
-                              </Box>
-                            )}
+
+                            {/* コンテンツ部分 */}
+                            <Box p={3}>
+                              <Text fontSize="xs" color="gray.500" mb={2}>
+                                from {node.file_name}
+                              </Text>
+                              <Text fontSize="xs" color="gray.400" mb={2}>
+                                {node.description}
+                              </Text>
+                              {node.schema && (Object.keys(node.schema.outputs).length  > 0 || Object.keys(node.schema.inputs).length  > 0) && (
+                                <Box>
+                                  <Text fontSize="xs" color="gray.500" mb={1}>
+                                    Ports: {Object.keys(node.schema.inputs).length}in / {Object.keys(node.schema.outputs).length}out
+                                  </Text>
+                                </Box>
+                              )}
+                            </Box>
                           </Box>
                         ))}
                       </SimpleGrid>
@@ -279,6 +601,100 @@ const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error }
           </Box>
         </VStack>
       </Box>
+
+      {/* コピー用ファイル名入力モーダル */}
+      <Modal isOpen={isCopyModalOpen} onClose={onCopyModalClose}>
+        <ModalOverlay />
+        <ModalContent bg="gray.800" color="white">
+          <ModalHeader>Copy Node</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Text mb={4}>
+              Copy "{nodeToAction?.label}" as:
+            </Text>
+            <Input
+              value={copyFileName}
+              onChange={(e) => setCopyFileName(e.target.value)}
+              placeholder="Enter new file name"
+              bg="gray.700"
+              border="1px solid"
+              borderColor="gray.600"
+              _focus={{
+                borderColor: "blue.400",
+                boxShadow: "0 0 0 1px #63b3ed",
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleCopyNode();
+                }
+              }}
+            />
+            <Text fontSize="xs" color="gray.400" mt={2}>
+              * .py extension will be added automatically
+            </Text>
+          </ModalBody>
+          <ModalFooter>
+            <Button 
+              variant="ghost" 
+              mr={3} 
+              onClick={onCopyModalClose}
+              color="gray.300"
+            >
+              Cancel
+            </Button>
+            <Button 
+              colorScheme="blue" 
+              onClick={handleCopyNode}
+              isLoading={isCopying === nodeToAction?.file_id}
+              isDisabled={!copyFileName.trim()}
+            >
+              Copy
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* 削除確認アラートダイアログ */}
+      <AlertDialog
+        isOpen={isDeleteAlertOpen}
+        leastDestructiveRef={cancelRef}
+        onClose={onDeleteAlertClose}
+      >
+        <AlertDialogOverlay>
+          <AlertDialogContent bg="gray.800" color="white">
+            <AlertDialogHeader fontSize="lg" fontWeight="bold">
+              Delete Node
+            </AlertDialogHeader>
+
+            <AlertDialogBody>
+              Are you sure you want to delete "{nodeToAction?.label}"?
+              <br />
+              <Text fontSize="sm" color="gray.400" mt={2}>
+                This action cannot be undone.
+              </Text>
+            </AlertDialogBody>
+
+            <AlertDialogFooter>
+              <Button 
+                ref={cancelRef} 
+                onClick={onDeleteAlertClose}
+                variant="ghost"
+                color="gray.300"
+              >
+                Cancel
+              </Button>
+              <Button 
+                colorScheme="red" 
+                onClick={handleDeleteNode} 
+                ml={3}
+                isLoading={isDeleting === nodeToAction?.file_id}
+              >
+                Delete
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
     </Box>
   );
 };
