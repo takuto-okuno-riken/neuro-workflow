@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   VStack,
   HStack,
@@ -10,11 +10,11 @@ import {
   Button,
   Tooltip,
   Input,
+  Textarea,
   IconButton,
   useToast,
 } from '@chakra-ui/react';
-import { ViewIcon, ExternalLinkIcon } from '@chakra-ui/icons';
-import { EditIcon, CheckIcon, CloseIcon } from '@chakra-ui/icons';
+import { EditIcon, CheckIcon, CloseIcon, ViewIcon } from '@chakra-ui/icons';
 import { CalculationNodeData, SchemaFields } from '../type';
 import { Node } from '@xyflow/react';
 
@@ -23,17 +23,30 @@ interface NodeDetailsContentProps {
   onNodeUpdate?: (nodeId: string, updatedData: Partial<CalculationNodeData>) => void;
   onRefreshNodeData?: (filename: string) => Promise<any>;
   onSyncWorkflowNodes?: (filename: string, updatedSchema: SchemaFields) => void;
+  onViewCode?: () => void;
 }
 
 const OpenJupyter = (filename : string) => {
-    window.open("http://localhost:8000/user/user1/lab/workspaces/auto-E/tree/upload_nodes/"+filename+".py", "_blank");
-  };
+    //window.open("http://localhost:8000/user/user1/lab/workspaces/auto-E/tree/nodes/"+filename+".py", "_blank");
+};
 
-const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNodeUpdate, onRefreshNodeData, onSyncWorkflowNodes }) => {
+const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNodeUpdate, onRefreshNodeData, onSyncWorkflowNodes, onViewCode }) => {
   const [editingParam, setEditingParam] = useState<string | null>(null);
   const [editingField, setEditingField] = useState<'default_value' | 'constraints' | null>(null);
   const [editValue, setEditValue] = useState<string>('');
+  const [localNodeData, setLocalNodeData] = useState<Node<CalculationNodeData> | null>(nodeData);
   const toast = useToast();
+
+  // nodeDataが変更されたときにローカル状態を更新し、編集状態をリセット
+  useEffect(() => {
+    console.log('NodeDetailsContent: nodeData changed', nodeData);
+    setLocalNodeData(nodeData);
+    
+    // 編集状態をリセット（パラメーター更新後に古い編集状態が残らないように）
+    setEditingParam(null);
+    setEditingField(null);
+    setEditValue('');
+  }, [nodeData]);
 
   // パラメータの更新API呼び出し
   const updateParameter = async (parameterKey: string, parameterValue: any, parameterField: 'default_value' | 'constraints') => {
@@ -47,7 +60,7 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
           parameter_key: parameterKey,
           parameter_field: parameterField,
           parameter_value: parameterValue,
-          filename: nodeData.data.file_name
+          filename: localNodeData.data.file_name
         }),
       });
 
@@ -56,64 +69,83 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
       }
 
       // DBから最新データを再取得またはローカル状態を更新
-      if (nodeData && onNodeUpdate) {
-        console.log('Starting post-update refresh process for node:', nodeData.id);
+      if (localNodeData && onNodeUpdate) {
+        console.log('Starting post-update refresh process for node:', localNodeData.id);
         console.log('onRefreshNodeData available:', !!onRefreshNodeData);
         
         let updatedSchema: SchemaFields;
         
+        // まずローカル状態を即座に更新（即時反映のため）
+        updatedSchema = { ...localNodeData.data.schema };
+        if (updatedSchema.parameters && updatedSchema.parameters[parameterKey]) {
+          updatedSchema.parameters[parameterKey] = {
+            ...updatedSchema.parameters[parameterKey],
+            [parameterField]: parameterValue
+          };
+          
+          console.log('Immediately updating node with new parameter value:', {
+            nodeId: localNodeData.id,
+            parameterKey,
+            parameterField,
+            parameterValue
+          });
+          
+          // ローカル状態を即座に更新（モーダル内の表示も更新される）
+          const updatedNodeData = {
+            ...localNodeData,
+            data: {
+              ...localNodeData.data,
+              schema: updatedSchema,
+              __timestamp: Date.now()
+            }
+          };
+          setLocalNodeData(updatedNodeData);
+          
+          // 親コンポーネントの状態も更新
+          onNodeUpdate(localNodeData.id, { 
+            schema: updatedSchema,
+            __timestamp: Date.now()
+          });
+        }
+        
+        // 次にサーバーから最新データを取得（データ整合性のため）
         if (onRefreshNodeData) {
           try {
-            console.log('Attempting to refresh data for file:', nodeData.data.file_name);
-            const refreshedData = await onRefreshNodeData(nodeData.data.file_name);
+            console.log('Attempting to refresh data for file:', localNodeData.data.file_name);
+            const refreshedData = await onRefreshNodeData(localNodeData.data.file_name);
             console.log('Refresh result:', refreshedData);
             
             if (refreshedData && refreshedData.schema) {
-              console.log('Updating node with refreshed schema:', refreshedData.schema);
+              console.log('Updating node with refreshed schema from server:', refreshedData.schema);
               updatedSchema = refreshedData.schema;
-              onNodeUpdate(nodeData.id, { schema: updatedSchema });
-            } else {
-              console.log('No refreshed data returned, using fallback local update');
-              // 再取得に失敗した場合のフォールバック
-              updatedSchema = { ...nodeData.data.schema };
-              if (updatedSchema.parameters && updatedSchema.parameters[parameterKey]) {
-                updatedSchema.parameters[parameterKey] = {
-                  ...updatedSchema.parameters[parameterKey],
-                  [parameterField]: parameterValue
-                };
-                onNodeUpdate(nodeData.id, { schema: updatedSchema });
-              }
+              
+              // ローカル状態も更新
+              const finalUpdatedNodeData = {
+                ...localNodeData,
+                data: {
+                  ...localNodeData.data,
+                  schema: updatedSchema,
+                  __timestamp: Date.now()
+                }
+              };
+              setLocalNodeData(finalUpdatedNodeData);
+              
+              // 親コンポーネントの状態も更新
+              onNodeUpdate(localNodeData.id, { 
+                schema: updatedSchema,
+                __timestamp: Date.now()
+              });
             }
           } catch (error) {
-            console.error('Failed to refresh node data:', error);
-            console.log('Using fallback local update due to refresh error');
-            // エラー時のフォールバック: ローカルの状態を更新
-            updatedSchema = { ...nodeData.data.schema };
-            if (updatedSchema.parameters && updatedSchema.parameters[parameterKey]) {
-              updatedSchema.parameters[parameterKey] = {
-                ...updatedSchema.parameters[parameterKey],
-                [parameterField]: parameterValue
-              };
-              onNodeUpdate(nodeData.id, { schema: updatedSchema });
-            }
-          }
-        } else {
-          console.log('onRefreshNodeData not available, using local update');
-          // onRefreshNodeDataが提供されていない場合、ローカル状態を更新
-          updatedSchema = { ...nodeData.data.schema };
-          if (updatedSchema.parameters && updatedSchema.parameters[parameterKey]) {
-            updatedSchema.parameters[parameterKey] = {
-              ...updatedSchema.parameters[parameterKey],
-              [parameterField]: parameterValue
-            };
-            onNodeUpdate(nodeData.id, { schema: updatedSchema });
+            console.error('Failed to refresh node data from server:', error);
+            // サーバーからの取得に失敗してもローカル更新は既に済んでいる
           }
         }
         
         // ワークフロー内の同一ファイルノードも同期更新
         if (onSyncWorkflowNodes && updatedSchema) {
-          console.log('Syncing workflow nodes with same file_name:', nodeData.data.file_name);
-          onSyncWorkflowNodes(nodeData.data.file_name, updatedSchema);
+          console.log('Syncing workflow nodes with same file_name:', localNodeData.data.file_name);
+          onSyncWorkflowNodes(localNodeData.data.file_name, updatedSchema);
         }
       }
 
@@ -143,7 +175,17 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
   const startEditing = (paramKey: string, field: 'default_value' | 'constraints', currentValue: any) => {
     setEditingParam(paramKey);
     setEditingField(field);
-    setEditValue(typeof currentValue === 'string' ? currentValue : JSON.stringify(currentValue));
+    
+    // 配列や複雑なオブジェクトを適切にフォーマット
+    if (Array.isArray(currentValue)) {
+      setEditValue(JSON.stringify(currentValue, null, 2));
+    } else if (typeof currentValue === 'object' && currentValue !== null) {
+      setEditValue(JSON.stringify(currentValue, null, 2));
+    } else if (typeof currentValue === 'string') {
+      setEditValue(currentValue);
+    } else {
+      setEditValue(JSON.stringify(currentValue));
+    }
   };
 
   // 編集保存
@@ -152,9 +194,16 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
 
     let parsedValue: any;
     try {
-      // JSONとして解析を試行、失敗したら文字列として扱う
+      // まずJSONとして解析を試行
       parsedValue = JSON.parse(editValue);
-    } catch {
+      
+      // 配列の場合の検証
+      if (Array.isArray(parsedValue)) {
+        console.log('Parsed array value:', parsedValue);
+      }
+    } catch (error) {
+      // JSON解析に失敗した場合、文字列として扱う
+      console.log('JSON parse failed, treating as string:', editValue);
       parsedValue = editValue;
     }
 
@@ -174,7 +223,7 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
     setEditValue('');
   };
 
-  if (!nodeData) {
+  if (!localNodeData) {
     return (
       <Flex align="center" justify="center" h="200px">
         <Text color="gray.500" fontStyle="italic" fontSize="lg">
@@ -184,9 +233,10 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
     );
   }
 
-  console.log("これデータ",nodeData)
+  console.log("これデータ", localNodeData);
+  console.log("NodeData timestamp in modal:", localNodeData.data.__timestamp || 'no timestamp');
 
-  const schema: SchemaFields = nodeData.data.schema || { inputs: {}, outputs: {}, parameters: {}, methods: {} };
+  const schema: SchemaFields = localNodeData.data.schema || { inputs: {}, outputs: {}, parameters: {}, methods: {} };
   
   const renderDataTypeColor = (type: string) => {
     const colorMap: Record<string, string> = {
@@ -209,15 +259,30 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
   const formatDataForDisplay = (data: any) => {
     if (Array.isArray(data)) {
       // 配列の場合、各要素を簡潔に表示
-      return data.map(item => {
+      if (data.length === 0) {
+        return '[]';
+      }
+      
+      // 配列の長さが5を超える場合は省略表示
+      if (data.length > 5) {
+        const firstFew = data.slice(0, 3).map(item => {
+          if (typeof item === 'object' && item !== null) {
+            return JSON.stringify(item);
+          }
+          return String(item);
+        });
+        return `[${firstFew.join(', ')}, ...${data.length - 3} more]`;
+      }
+      
+      return `[${data.map(item => {
         if (typeof item === 'object' && item !== null) {
           // オブジェクトの場合、キーのみまたは重要なプロパティのみを表示
-          if (item.name) return item.name;
-          if (item.type) return item.type;
+          if (item.name) return `"${item.name}"`;
+          if (item.type) return `"${item.type}"`;
           return JSON.stringify(item);
         }
-        return String(item);
-      }).join(', ');
+        return typeof item === 'string' ? `"${item}"` : String(item);
+      }).join(', ')}]`;
     }
     
     if (typeof data === 'object' && data !== null) {
@@ -227,7 +292,7 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
     return String(data);
   };
 
-    // ノードのファイル名を取得（nodeData.data.filenameまたはnodeData.data.sourceFileなど、実際の構造に合わせて調整）
+  // ノードのファイル名を取得（nodeData.data.filenameまたはnodeData.data.sourceFileなど、実際の構造に合わせて調整）
   const getNodeFileName = () => {
     // 以下は例です。実際のデータ構造に合わせて調整してください
     return nodeData.data.file_name;
@@ -274,36 +339,54 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
                   <HStack align="start" spacing={2}>
                     <Text fontSize="xs" color="gray.400" minW="80px">default_value:</Text>
                     {editingParam === key && editingField === 'default_value' ? (
-                      <HStack flex="1" spacing={1}>
-                        <Input
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          size="xs"
-                          bg="gray.600"
-                          color="white"
-                          fontSize="xs"
-                        />
-                        <IconButton
-                          aria-label="Save"
-                          icon={<CheckIcon />}
-                          size="xs"
-                          colorScheme="green"
-                          onClick={saveEdit}
-                        />
-                        <IconButton
-                          aria-label="Cancel"
-                          icon={<CloseIcon />}
-                          size="xs"
-                          colorScheme="red"
-                          onClick={cancelEdit}
-                        />
-                      </HStack>
+                      <VStack flex="1" spacing={1} align="stretch">
+                        {editValue.includes('\n') || editValue.startsWith('[') || editValue.startsWith('{') ? (
+                          <Textarea
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            size="xs"
+                            bg="gray.600"
+                            color="white"
+                            fontSize="xs"
+                            minH="80px"
+                            resize="vertical"
+                            placeholder="配列の場合: [1, 2, 3] または ['a', 'b', 'c']"
+                          />
+                        ) : (
+                          <Input
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            size="xs"
+                            bg="gray.600"
+                            color="white"
+                            fontSize="xs"
+                          />
+                        )}
+                        <HStack spacing={1}>
+                          <IconButton
+                            aria-label="Save"
+                            icon={<CheckIcon />}
+                            size="xs"
+                            colorScheme="green"
+                            onClick={saveEdit}
+                          />
+                          <IconButton
+                            aria-label="Cancel"
+                            icon={<CloseIcon />}
+                            size="xs"
+                            colorScheme="red"
+                            onClick={cancelEdit}
+                          />
+                        </HStack>
+                      </VStack>
                     ) : (
                       <HStack flex="1" spacing={1}>
                         <Code colorScheme="gray" fontSize="xs" bg="gray.600" color="white" flex="1">
-                          {typeof param.default_value === 'string' 
-                            ? `"${param.default_value}"` 
-                            : String(param.default_value)}
+                          {Array.isArray(param.default_value) || typeof param.default_value === 'object' 
+                            ? formatDataForDisplay(param.default_value)
+                            : typeof param.default_value === 'string' 
+                              ? `"${param.default_value}"` 
+                              : String(param.default_value)}
                         </Code>
                         <Tooltip label="Edit default value" hasArrow>
                           <IconButton
@@ -324,31 +407,47 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
                 <HStack align="start" spacing={2}>
                   <Text fontSize="xs" color="gray.400" minW="80px">constraints:</Text>
                   {editingParam === key && editingField === 'constraints' ? (
-                    <HStack flex="1" spacing={1}>
-                      <Input
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        size="xs"
-                        bg="gray.600"
-                        color="white"
-                        fontSize="xs"
-                        placeholder="Enter constraints (JSON format)"
-                      />
-                      <IconButton
-                        aria-label="Save"
-                        icon={<CheckIcon />}
-                        size="xs"
-                        colorScheme="green"
-                        onClick={saveEdit}
-                      />
-                      <IconButton
-                        aria-label="Cancel"
-                        icon={<CloseIcon />}
-                        size="xs"
-                        colorScheme="red"
-                        onClick={cancelEdit}
-                      />
-                    </HStack>
+                    <VStack flex="1" spacing={1} align="stretch">
+                      {editValue.includes('\n') || editValue.startsWith('[') || editValue.startsWith('{') ? (
+                        <Textarea
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          size="xs"
+                          bg="gray.600"
+                          color="white"
+                          fontSize="xs"
+                          minH="80px"
+                          resize="vertical"
+                          placeholder="制約条件 (JSON形式): {'min': 0, 'max': 100} または ['option1', 'option2']"
+                        />
+                      ) : (
+                        <Input
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          size="xs"
+                          bg="gray.600"
+                          color="white"
+                          fontSize="xs"
+                          placeholder="制約条件 (JSON形式)"
+                        />
+                      )}
+                      <HStack spacing={1}>
+                        <IconButton
+                          aria-label="Save"
+                          icon={<CheckIcon />}
+                          size="xs"
+                          colorScheme="green"
+                          onClick={saveEdit}
+                        />
+                        <IconButton
+                          aria-label="Cancel"
+                          icon={<CloseIcon />}
+                          size="xs"
+                          colorScheme="red"
+                          onClick={cancelEdit}
+                        />
+                      </HStack>
+                    </VStack>
                   ) : (
                     <HStack flex="1" spacing={1}>
                       <Code colorScheme="blue" fontSize="xs" bg="blue.600" color="white" flex="1">
@@ -473,41 +572,35 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
     <>
       <Box p={6} h="100%" overflowY="auto" maxW="none" w="100%">
         <VStack spacing={6} align="stretch" maxW="none">
-          {/* Node Info Header with View Code Button */}
+          {/* Node Info Header */}
           <Box bg="gray.800" borderRadius="lg" boxShadow="md" marginTop={-5} p={4}>
-            <HStack justify="space-between" align="start">
+            <Flex justify="space-between" align="start">
               <VStack align="start" spacing={1}>
                 <Text fontWeight="bold" fontSize="xl" color="purple.300">
-                  {nodeData.data.label}
+                  {localNodeData.data.label}
                 </Text>
                 <Text fontSize="sm" color="gray.400">
-                  Node ID: {nodeData.id}
+                  Node ID: {localNodeData.id}
                 </Text>
+                {localNodeData.data.__timestamp && (
+                  <Text fontSize="xs" color="gray.500">
+                    Last updated: {new Date(localNodeData.data.__timestamp).toLocaleTimeString()}
+                  </Text>
+                )}
               </VStack>
-              {/* View Code Button */}
-              <HStack spacing={2}>
-                <Tooltip label="View source code for this node" placement="left">
-                  <Button
-                    leftIcon={<ViewIcon />}
-                    rightIcon={<ExternalLinkIcon />}
-                    colorScheme="blue"
-                    variant="outline"
-                    size="sm"
-                    /* onClick={() => setIsCodeModalOpen(true)} */
-                    onClick={() => OpenJupyter(getNodeFileName())}
-                    _hover={{
-                      bg: 'blue.500',
-                      color: 'white',
-                      transform: 'translateY(-2px)',
-                      boxShadow: 'lg',
-                    }}
-                    transition="all 0.2s"
-                  >
-                    View Code
-                  </Button>
-                </Tooltip>
-              </HStack>
-            </HStack>
+              {onViewCode && (
+                <Button
+                  size="sm"
+                  colorScheme="blue"
+                  leftIcon={<ViewIcon />}
+                  onClick={onViewCode}
+                  //onClick={() => OpenJupyter(getNodeFileName())}
+                  variant="solid"
+                >
+                  View Code
+                </Button>
+              )}
+            </Flex>
           </Box>
 
           {/* 4つのセクションを2x2グリッドで配置 */}

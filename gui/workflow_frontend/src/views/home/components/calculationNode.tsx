@@ -1,7 +1,8 @@
 import { Handle, NodeProps, Position } from "@xyflow/react";
 import { CalculationNodeData } from "../type";
-import { Badge, Box, Text, HStack, IconButton, Tooltip } from "@chakra-ui/react";
+import { Badge, Box, Text, HStack, IconButton, Tooltip, Icon } from "@chakra-ui/react";
 import { ViewIcon, InfoIcon, DeleteIcon } from "@chakra-ui/icons";
+import { FiCode } from "react-icons/fi";
 
 interface NodeCallbacks {
   onJupyter?: (nodeId: string) => void;
@@ -16,9 +17,10 @@ export const CalculationNode = ({
   selected,
   ...callbacks 
 }: NodeProps<CalculationNodeData> & NodeCallbacks) => {
-  const schema = data.schema || { inputs: {}, outputs: {} };
+  const schema = data.schema || { inputs: {}, outputs: {}, parameters: {} };
 
   console.log("これがスキーマデータ", schema);
+  console.log("Node data timestamp:", data.__timestamp || 'no timestamp');
   
   // ハンドルIDを一意に生成する関数
   const generateHandleId = (nodeId: string, fieldName: string, handleType: 'input' | 'output', portType: string) => {
@@ -70,9 +72,26 @@ export const CalculationNode = ({
         transition="all 0.2s"
       >
         {/* ノード名（中央） */}
-        <Text fontSize="sm" fontWeight="bold" textAlign="center">
-          {data.label}
-        </Text>
+        <HStack justify="space-between" align="center">
+          <Text fontSize="sm" fontWeight="bold" flex="1" textAlign="center">
+            {data.label}
+          </Text>
+          {schema.parameters && Object.keys(schema.parameters).length > 0 && (
+            <Badge
+              colorScheme="yellow"
+              size="sm"
+              variant="solid"
+              fontSize="8px"
+              px={1}
+              py={0.5}
+              borderRadius="full"
+              minW="16px"
+              textAlign="center"
+            >
+              P{Object.keys(schema.parameters).length}
+            </Badge>
+          )}
+        </HStack>
       </Box>
       
       {/* ボタン専用フィールド */}
@@ -95,7 +114,7 @@ export const CalculationNode = ({
               variant="solid"
               bg="orange.400"
               color="white"
-              icon={<Text fontSize="9px" fontWeight="bold">JP</Text>}
+              icon={<Icon as={FiCode} boxSize={2.5} />}
               onClick={(e) => {
                 e.stopPropagation();
                 callbacks.onJupyter?.(id);
@@ -148,6 +167,7 @@ export const CalculationNode = ({
         </HStack>
       </Box>
       
+
       {/* フィールド表示 */}
       <Box p={0}>
         {allFields.map((field, index) => {
@@ -186,7 +206,7 @@ export const CalculationNode = ({
                     (isOutput ? 'green' : isInput ? 'blue' : 'gray') : 
                   field.type === 'str' || field.type === 'string' ? 'purple' :
                   field.type === 'bool' || field.type === 'boolean' ? 'orange' :
-                  field.type === 'list' || field.type === 'array' ? 'teal' :
+                  field.type === 'list' || field.type === 'array' || field.type?.includes('[]') ? 'teal' :
                   field.type === 'dict' || field.type === 'object' ? 'yellow' :
                   'gray'
                 }
@@ -194,7 +214,7 @@ export const CalculationNode = ({
                 fontSize="10px"
                 variant="subtle"
               >
-                {field.type}
+                {field.type?.includes('[]') ? `${field.type}` : field.type}
               </Badge>
               
               {/* 入力ハンドル */}

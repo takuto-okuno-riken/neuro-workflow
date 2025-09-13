@@ -48,8 +48,8 @@ import {controlsStyle, minimapStyle} from './style';
 import { createAuthHeaders } from '../../api/authHeaders';
 import { useUploadedNodes } from '../../hooks/useUploadedNodes';
 import NodeDetailsContent from './components/nodeDetailModal';
-import JupyterModal from './components/jupyterModal';
-import useJupyterHub from '../../hooks/useJupyterHub';
+import { DeleteConfirmDialog } from './components/deleteConfirmDialog';
+import { useTabContext } from '../../components/tabs/TabManager';
 
 const HomeView = () => {
   const toast = useToast();
@@ -76,23 +76,17 @@ const HomeView = () => {
   const [edgeMenuPosition, setEdgeMenuPosition] = useState<{ x: number, y: number } | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
 
-  const { isOpen: isJupyterOpen, onOpen: onJupyterOpen, onClose: onJupyterClose } = useDisclosure();
   const { isOpen: isViewOpen, onOpen: onViewOpen, onClose: onViewClose } = useDisclosure();
   const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure();
+  const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
   const [selectedNode, setSelectedNode] = useState<Node<CalculationNodeData> | null>(null);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+  const [isDeletingProject, setIsDeletingProject] = useState(false);
 
+  // タブシステムのコンテキストを使用
+  const { addJupyterTab } = useTabContext();
 
-  const {
-  launchJupyter,
-  isLoading: isJupyterLoading,
-  isReady: isJupyterReady,
-  getError: getJupyterError,
-} = useJupyterHub({
-  baseUrl: 'http://localhost:8000',
-  apiEndpoint: '/api/jupyterhub',
-  isDevelopment: true  // 開発モード
-});
-
+  // Jupyterを開く
   const handleOpenJupyter = useCallback(async () => {
     if (!selectedProject) {
       toast({
@@ -105,23 +99,37 @@ const HomeView = () => {
       return;
     }
 
-    // モーダルを開く
-    onJupyterOpen();
-    
-    // まだ起動していない場合は起動
-    if (!isJupyterReady(selectedProject)) {
-      await launchJupyter(selectedProject);
+    try {
+      // プロジェクト名を取得
+      const projectName = projects.find(p => p.id === selectedProject)?.name || selectedProject;
+      const projectId = projects.find(p => p.id === selectedProject)?.id || selectedProject;
+      
+      // JupyterLab URLを構築（開発モード）
+      //const jupyterUrl = `http://localhost:8000/hub/login?username=user1&password=password`;
+      const jupyterUrl = `http://localhost:8000/user/user1/lab/workspaces/auto-E/tree/projects/${projectId}/${projectId}.py?username=user1&password=password`;
+      
+      // 新しいタブを作成
+      addJupyterTab(selectedProject, projectName, jupyterUrl);
+      
+      toast({
+        title: "JupyterLab Tab Created",
+        description: `Created tab for project "${projectName}"`,
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+      
+    } catch (error) {
+      console.error('Error creating JupyterLab tab:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create JupyterLab tab",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
     }
-  }, [selectedProject, onJupyterOpen, launchJupyter, isJupyterReady, toast]);
-
-  // JupyterModalが閉じられた時のハンドラー
-  const handleJupyterClose = useCallback(() => {
-    onJupyterClose();
-    // 必要に応じてセッションを閉じる
-    // if (selectedProject) {
-    //   closeJupyterSession(selectedProject);
-    // }
-  }, [onJupyterClose]);
+  }, [selectedProject, projects, addJupyterTab, toast]);
 
   // ノードのコールバック関数
   const handleNodeJupyter = useCallback((nodeId: string) => {
@@ -142,40 +150,66 @@ const HomeView = () => {
   }, [nodes, onViewOpen]);
 
   const handleNodeUpdate = useCallback((nodeId: string, updatedData: Partial<CalculationNodeData>) => {
-    setNodes((nds) => 
-      nds.map((node) => 
-        node.id === nodeId 
-          ? { ...node, data: { ...node.data, ...updatedData } }
-          : node
-      )
-    );
+    console.log('handleNodeUpdate called for node:', nodeId, 'with data:', updatedData);
+    
+    setNodes((nds) => {
+      const updatedNodes = nds.map((node) => {
+        if (node.id === nodeId) {
+          // 完全に新しいオブジェクトを作成してReact Flowに変更を認識させる
+          const updatedNode = { 
+            ...node, 
+            data: { ...node.data, ...updatedData },
+            // 強制的に再レンダリングを起こすためにtimestampを追加
+            __timestamp: Date.now()
+          };
+          console.log('Node updated:', updatedNode);
+          return updatedNode;
+        }
+        return node;
+      });
+      console.log('Updated nodes array length:', updatedNodes.length);
+      return updatedNodes;
+    });
+    
     // selectedNodeも更新
-    setSelectedNode((prevNode) => 
-      prevNode?.id === nodeId 
-        ? { ...prevNode, data: { ...prevNode.data, ...updatedData } }
-        : prevNode
-    );
+    setSelectedNode((prevNode) => {
+      if (prevNode?.id === nodeId) {
+        const updatedSelectedNode = { 
+          ...prevNode, 
+          data: { ...prevNode.data, ...updatedData }
+        };
+        console.log('Selected node updated:', updatedSelectedNode);
+        return updatedSelectedNode;
+      }
+      return prevNode;
+    });
   }, [setNodes]);
 
   // 同一ファイル名のワークフローノードをすべて同期更新
   const handleSyncWorkflowNodes = useCallback((filename: string, updatedSchema: SchemaFields) => {
     console.log('Syncing all workflow nodes with file_name:', filename);
     
-    setNodes((nds) => 
-      nds.map((node) => {
+    setNodes((nds) => {
+      const updatedNodes = nds.map((node) => {
         if (node.data.file_name === filename) {
           console.log('Updating workflow node:', node.id, 'with new schema');
-          return { 
+          // 完全に新しいオブジェクトを作成してReact Flowに変更を認識させる
+          const updatedNode = { 
             ...node, 
             data: { 
               ...node.data, 
               schema: updatedSchema 
-            } 
+            },
+            // 強制的に再レンダリングを起こすためにtimestampを追加
+            __timestamp: Date.now()
           };
+          return updatedNode;
         }
         return node;
-      })
-    );
+      });
+      console.log('Sync update completed, affected nodes:', updatedNodes.filter(n => n.data.file_name === filename).length);
+      return updatedNodes;
+    });
     
     // selectedNodeも同期更新（一時ノードの場合も含む）
     setSelectedNode((prevNode) => {
@@ -360,17 +394,43 @@ const HomeView = () => {
     }
   }, [setNodes, setEdges, toast, autoSaveEnabled, selectedProject]);
 
-  // nodeTypes を useMemo で定義
-  const nodeTypes = useMemo(() => ({
-    calculationNode: (props: NodeProps<CalculationNodeData>) => (
+  // nodeTypes を useMemo で定義 - すべてのカテゴリタイプをcalculationNodeコンポーネントにマッピング
+  const nodeTypes = useMemo(() => {
+    const calculationNodeComponent = (props: NodeProps<CalculationNodeData>) => (
       <CalculationNode
         {...props}
         onJupyter={handleNodeJupyter}
         onInfo={handleNodeInfo}
         onDelete={handleNodeDelete}
       />
-    )
-  }), [handleNodeJupyter, handleNodeInfo, handleNodeDelete]);
+    );
+
+    // 基本のタイプ
+    const types: Record<string, any> = {
+      calculationNode: calculationNodeComponent,
+      default: calculationNodeComponent, // fallback
+    };
+
+    // uploadedNodesから動的にカテゴリタイプを追加
+    if (uploadedNodes?.nodes) {
+      const categories = new Set(uploadedNodes.nodes.map(node => node.category));
+      categories.forEach(category => {
+        if (category && !types[category]) {
+          types[category] = calculationNodeComponent;
+        }
+      });
+    }
+
+    // よくあるカテゴリを事前定義
+    const commonCategories = ['analysis', 'preprocessing', 'visualization', 'modeling', 'utils', 'Uploaded Nodes'];
+    commonCategories.forEach(category => {
+      if (!types[category]) {
+        types[category] = calculationNodeComponent;
+      }
+    });
+
+    return types;
+  }, [handleNodeJupyter, handleNodeInfo, handleNodeDelete, uploadedNodes]);
 
 
   // API通信用のヘルパー関数
@@ -740,6 +800,66 @@ const HomeView = () => {
     fetchProjects();
   }, [toast]);
 
+  // プロジェクト削除の開始
+  const handleProjectDeleteStart = useCallback((project: Project) => {
+    setProjectToDelete(project);
+    onDeleteOpen();
+  }, [onDeleteOpen]);
+
+  // プロジェクト削除の実行
+  const handleProjectDelete = useCallback(async () => {
+    if (!projectToDelete) return;
+
+    setIsDeletingProject(true);
+    try {
+      const headers = await createAuthHeaders();
+      const response = await fetch(`/api/workflow/${projectToDelete.id}/`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          ...headers,
+        },
+      });
+
+      if (response.ok) {
+        // プロジェクトリストから削除
+        setProjects(prevProjects => prevProjects.filter(p => p.id !== projectToDelete.id));
+        
+        // 削除したプロジェクトが選択されていた場合、クリア
+        if (selectedProject === projectToDelete.id) {
+          setSelectedProject(null);
+          setNodes([]);
+          setEdges([]);
+        }
+
+        toast({
+          title: "Project Deleted",
+          description: `Project "${projectToDelete.name}" has been successfully deleted`,
+          status: "success",
+          duration: 3000,
+          isClosable: true,
+        });
+
+        onDeleteClose();
+        setProjectToDelete(null);
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to delete project');
+      }
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      toast({
+        title: "Deletion Error",
+        description: `Failed to delete project: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setIsDeletingProject(false);
+    }
+  }, [projectToDelete, selectedProject, toast, onDeleteClose]);
+
   // プロジェクト選択時にフローデータを取得
   const handleProjectChange = async (projectId: string) => {
     if (!projectId) {
@@ -954,7 +1074,7 @@ const HomeView = () => {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // モーダルが開いている時は削除処理を無効化
-      if (isViewOpen || isCodeOpen || isJupyterOpen) {
+      if (isViewOpen || isCodeOpen) {
         return;
       }
       
@@ -1016,7 +1136,7 @@ const HomeView = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [nodes, edges, setNodes, setEdges, toast, autoSaveEnabled, isViewOpen, isCodeOpen, isJupyterOpen]);
+  }, [nodes, edges, setNodes, setEdges, toast, autoSaveEnabled, isViewOpen, isCodeOpen]);
 
   // ノード削除処理（メニューから）
   const handleDeleteNode = useCallback(() => {
@@ -1201,7 +1321,7 @@ const HomeView = () => {
           }
           
           // matchedNodeから正しいラベルとタイプを取得
-          nodeType = matchedNode.nodeType || matchedNode.type || 'calculationNode';
+          nodeType = matchedNode.category || matchedNode.nodeType || matchedNode.type || 'calculationNode';
           label = matchedNode.label || matchedNode.name || label;
           fileName = matchedNode.file_name || ""  
         } else {
@@ -1237,7 +1357,7 @@ const HomeView = () => {
       
       const newNode: Node<CalculationNodeData> = {
         id: newNodeId,
-        type: 'calculationNode',
+        type: nodeType,
         position,
         data: { 
           file_name: fileName,
@@ -1487,7 +1607,7 @@ const HomeView = () => {
   }, []);
 
   return (
-    <HStack>
+    <div style={{ width: '100%', height: '100vh', position: 'relative', overflow: 'hidden' }}>
       <SideBoxArea 
         nodes={uploadedNodes} 
         isLoading={isNodesLoading}  // ノード専用
@@ -1496,7 +1616,7 @@ const HomeView = () => {
         onNodeInfo={handleSidebarNodeInfo}
         onViewCode={handleSidebarViewCode}
       />
-      <div style={{ width: '98.5vw', height: '92vh', marginLeft: '300px', position: 'relative' }}>
+      <div style={{ width: '100%', height: '100%', position: 'relative' }}>
         <style>
           {`
             .react-flow__controls {
@@ -1540,6 +1660,7 @@ const HomeView = () => {
           projects={projects}
           selectedProject={selectedProject}
           onProjectChange={handleProjectChange}
+          onProjectDelete={handleProjectDeleteStart}
           autoSaveEnabled={autoSaveEnabled}
           isConnected={isConnected}
         />
@@ -1603,8 +1724,6 @@ const HomeView = () => {
               size="sm"
               onClick={handleOpenJupyter}  
               isDisabled={!selectedProject}
-              isLoading={selectedProject ? isJupyterLoading(selectedProject) : false}
-              loadingText="Starting..."
               _hover={{ bg: "purple.50", transform: "translateY(-1px)" }}
               _disabled={{ 
                 opacity: 0.4,
@@ -1612,7 +1731,7 @@ const HomeView = () => {
               }}
               transition="all 0.2s"
             >
-              {selectedProject ? "🚀 Open JupyterLab" : "Select Project First"}
+              {selectedProject ? "🚀 Open JupyterLab Tab" : "Select Project First"}
             </Button>
             
             <Button
@@ -1651,18 +1770,6 @@ const HomeView = () => {
               {nodes.length === 0 ? "No Flow to Export" : "📋 Export Flow JSON"}
             </Button>
             
-            {/* JupyterHubの状態表示 */}
-            {selectedProject && isJupyterReady(selectedProject) && (
-              <Text fontSize="xs" color="green.500" textAlign="center">
-                ✅ JupyterLab Ready
-              </Text>
-            )}
-            
-            {selectedProject && getJupyterError(selectedProject) && (
-              <Text fontSize="xs" color="red.500" textAlign="center">
-                ❌ Launch Error
-              </Text>
-            )}
             
             {selectedProject && (
               <Text fontSize="xs" color="gray.500" textAlign="center">
@@ -1747,6 +1854,10 @@ const HomeView = () => {
                 onNodeUpdate={handleNodeUpdate}
                 onRefreshNodeData={handleRefreshNodeData}
                 onSyncWorkflowNodes={handleSyncWorkflowNodes}
+                onViewCode={() => {
+                  onViewClose();
+                  onCodeOpen();
+                }}
               />
             </ModalBody>
             <ModalFooter>
@@ -1756,13 +1867,6 @@ const HomeView = () => {
         </Modal>
 
 
-        <JupyterModal
-          isOpen={isJupyterOpen}
-          onClose={handleJupyterClose}
-          projectId={selectedProject}
-          title="Jupyter Lab - Workflow Editor"
-          jupyterBaseUrl="http://localhost:8000"
-        />
 
         {/* Code Editor Modal */}
         <CodeEditorModal
@@ -1779,8 +1883,20 @@ const HomeView = () => {
           showExecute={false}
           language="python"
         />
+
+        {/* プロジェクト削除確認ダイアログ */}
+        <DeleteConfirmDialog
+          isOpen={isDeleteOpen}
+          onClose={() => {
+            onDeleteClose();
+            setProjectToDelete(null);
+          }}
+          onConfirm={handleProjectDelete}
+          project={projectToDelete}
+          isDeleting={isDeletingProject}
+        />
       </div>
-    </HStack>
+    </div>
   );
 }
 //http://localhost:3000/api/workflow/${projectId}/code/

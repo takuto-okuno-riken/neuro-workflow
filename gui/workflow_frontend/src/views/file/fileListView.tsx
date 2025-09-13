@@ -65,7 +65,8 @@ const FileListView = () => {
   };
 
   return (
-    <Container maxW="6xl" p={6} bg="gray.800" boxShadow="lg" borderRadius="lg">
+    <Box height="100%" width="100%" overflow="auto" bg="gray.900">
+      <Container maxW="6xl" p={6} bg="gray.800" boxShadow="lg" borderRadius="lg" minHeight="100vh">
       <HStack 
       width="100%" 
       spacing={4} 
@@ -131,7 +132,8 @@ const FileListView = () => {
       <Text mt={6} color="gray.600" fontSize="sm">
         Displayed: {files.length}
       </Text>
-    </Container>
+      </Container>
+    </Box>
   );
 };
 

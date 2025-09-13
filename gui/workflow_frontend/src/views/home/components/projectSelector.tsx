@@ -8,19 +8,23 @@ import {
   Badge,
   Text,
   Flex,
+  IconButton,
+  Tooltip,
 } from '@chakra-ui/react';
-import { CheckIcon, WarningIcon } from '@chakra-ui/icons';
+import { CheckIcon, WarningIcon, DeleteIcon } from '@chakra-ui/icons';
 
 export const ProjectSelector = ({ 
   projects, 
   selectedProject, 
   onProjectChange, 
+  onProjectDelete,
   autoSaveEnabled = true,
   isConnected = true 
 }: {
   projects: Project[];
   selectedProject: string | null;
   onProjectChange: (projectId: string) => void;
+  onProjectDelete?: (project: Project) => void;
   autoSaveEnabled?: boolean;
   isConnected?: boolean;
 }) => {
@@ -91,28 +95,53 @@ export const ProjectSelector = ({
         </Flex>
         
         {/* プロジェクト選択 */}
-        <Select 
-          value={selectedProject || ''} 
-          onChange={(e) => onProjectChange(e.target.value)}
-          size="sm"
-          bg="white"
-          color="gray.800"
-          borderColor="gray.300"
-          placeholder="Choose a project..."
-          _hover={{
-            borderColor: "blue.300"
-          }}
-          _focus={{
-            borderColor: "blue.500",
-            boxShadow: "0 0 0 1px #3182ce"
-          }}
-        >
-          {projects.map(project => (
-            <option key={project.id} value={project.id} style={{color: '#2D3748'}}>
-              {project.name}
-            </option>
-          ))}
-        </Select>
+        <HStack spacing={2}>
+          <Select 
+            value={selectedProject || ''} 
+            onChange={(e) => onProjectChange(e.target.value)}
+            size="sm"
+            bg="white"
+            color="gray.800"
+            borderColor="gray.300"
+            placeholder="Choose a project..."
+            _hover={{
+              borderColor: "blue.300"
+            }}
+            _focus={{
+              borderColor: "blue.500",
+              boxShadow: "0 0 0 1px #3182ce"
+            }}
+            flex="1"
+          >
+            {projects.map(project => (
+              <option key={project.id} value={project.id} style={{color: '#2D3748'}}>
+                {project.name}
+              </option>
+            ))}
+          </Select>
+          
+          {selectedProject && onProjectDelete && (
+            <Tooltip label="Delete project" placement="top">
+              <IconButton
+                aria-label="Delete project"
+                icon={<DeleteIcon />}
+                size="sm"
+                colorScheme="red"
+                variant="outline"
+                onClick={() => {
+                  const project = projects.find(p => p.id === selectedProject);
+                  if (project) {
+                    onProjectDelete(project);
+                  }
+                }}
+                _hover={{
+                  bg: "red.50",
+                  borderColor: "red.400"
+                }}
+              />
+            </Tooltip>
+          )}
+        </HStack>
         
         {/* ステータスメッセージ */}
         {selectedProject && (

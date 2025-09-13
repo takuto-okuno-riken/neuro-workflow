@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Box,
   Button,
   Text,
   Input,
@@ -161,7 +162,8 @@ const CreateFlowPj: React.FC = () => {
   };
 
   return (
-    <VStack spacing={6} width="100%" p={6} maxWidth="600px" mx="auto">
+    <Box height="100%" width="100%" overflow="auto" bg="gray.900">
+      <VStack spacing={6} width="100%" p={6} maxWidth="600px" mx="auto" minHeight="100vh">
       <Text fontSize="2xl" fontWeight="bold" mb={2} color="white">
         🚀 Create Flow Project
       </Text>
@@ -251,7 +253,8 @@ const CreateFlowPj: React.FC = () => {
           </Button>
         </GridItem>
       </Grid>
-    </VStack>
+      </VStack>
+    </Box>
   );
 };
 

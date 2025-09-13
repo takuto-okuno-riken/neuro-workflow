@@ -29,10 +29,11 @@ import {
   AlertDialogHeader,
   AlertDialogBody,
   AlertDialogFooter,
+  Tooltip,
 } from '@chakra-ui/react';
 import { useEffect, useState, useRef } from 'react';
 import { IconType } from 'react-icons';
-import { FiBox, FiCopy, FiTrash2, FiInfo, FiCode } from 'react-icons/fi'; // デフォルトアイコンとして使用
+import { FiBox, FiCopy, FiTrash2, FiInfo, FiCode, FiRefreshCw } from 'react-icons/fi'; // デフォルトアイコンとして使用
 import { SchemaFields } from '../home/type';
 import { createAuthHeaders } from '../../api/authHeaders';
 
@@ -67,6 +68,10 @@ interface BackendNodeType {
 interface NodeTypeWithIcon extends Omit<BackendNodeType, 'icon'> {
   icon: IconType;
 }
+const OpenJupyter = (filename : string) => {
+    //window.open("http://localhost:8000/user/user1/lab/workspaces/auto-E/tree/nodes/"+filename+".py", "_blank");
+    window.open("http://localhost:8000/user/user1/lab/workspaces/auto-E/tree/upload_nodes/"+filename+".py", "_blank");
+};
 
 const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error, onRefresh, onNodeInfo, onViewCode }) => {
   const [searchResult, setSearchResult] = useState<string>('');
@@ -75,6 +80,7 @@ const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error, 
   const [isCopying, setIsCopying] = useState<string | null>(null);
   const [copyFileName, setCopyFileName] = useState<string>('');
   const [nodeToAction, setNodeToAction] = useState<NodeTypeWithIcon | null>(null);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const toast = useToast();
 
   // ダイアログ管理
@@ -207,6 +213,52 @@ const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error, 
       });
     } finally {
       setIsDeleting(null);
+    }
+  };
+
+  // ノードデータ同期
+  const handleSyncNodes = async () => {
+    setIsSyncing(true);
+    
+    try {
+      const headers = await createAuthHeaders();
+      const response = await fetch('/api/box/sync/', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          ...headers,
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        toast({
+          title: "Sync Completed",
+          description: result.message || "Node data synchronized successfully",
+          status: "success",
+          duration: 4000,
+          isClosable: true,
+        });
+        
+        // Refresh the nodes list after sync
+        if (onRefresh) {
+          await onRefresh();
+        }
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to sync node data');
+      }
+    } catch (error) {
+      console.error('Sync error:', error);
+      toast({
+        title: "Sync Failed",
+        description: `Failed to sync node data: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -364,11 +416,39 @@ const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error, 
           <Box position="sticky" top={0} bg="gray.900" pb={2} zIndex={1}>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
               <Heading size="md">Node Library</Heading>
-              {nodes && (
-                <Text fontSize="xs" color="gray.400">
-                  {nodes.total_nodes} nodes from {nodes.total_files} files
-                </Text>
-              )}
+              <HStack spacing={2}>
+                {nodes && (
+                  <Text fontSize="xs" color="gray.400">
+                    {nodes.total_nodes} nodes from {nodes.total_files} files
+                  </Text>
+                )}
+                <Tooltip 
+                  label="Node Refresh - Sync node data from server" 
+                  hasArrow
+                  placement="bottom"
+                  bg="gray.800"
+                  color="white"
+                  fontSize="sm"
+                >
+                  <IconButton
+                    aria-label="Sync node data"
+                    icon={<Icon as={FiRefreshCw} />}
+                    size="sm"
+                    colorScheme="blue"
+                    variant="ghost"
+                    isLoading={isSyncing}
+                    onClick={handleSyncNodes}
+                    _hover={{
+                      bg: "blue.600",
+                      color: "white"
+                    }}
+                    _active={{
+                      bg: "blue.700"
+                    }}
+                    disabled={isSyncing}
+                  />
+                </Tooltip>
+              </HStack>
             </Box>
             <KeywordSearch 
               onSearch={handleSearch}
@@ -376,9 +456,40 @@ const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error, 
               size="md"
               width="100%"
             />
+            
+            {/* 同期中のインディケーター */}
+            {isSyncing && (
+              <Box 
+                mt={2} 
+                p={2} 
+                bg="blue.900" 
+                borderRadius="md" 
+                border="1px solid" 
+                borderColor="blue.700"
+              >
+                <HStack spacing={2}>
+                  <Spinner size="sm" color="blue.300" />
+                  <Text fontSize="sm" color="blue.200">
+                    Syncing node data... This may take a moment.
+                  </Text>
+                </HStack>
+              </Box>
+            )}
           </Box>
           
           <Divider borderColor="gray.700" />
+
+          <Text 
+            fontSize="sm" 
+            fontWeight="bold" 
+            color="gray.400" 
+            mt = {-4}
+            mb={-3}
+            textTransform="uppercase"
+            letterSpacing="wider"
+          >
+            Nodes
+          </Text>
           
           <Box>
             {isLoading ? (
@@ -408,7 +519,7 @@ const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error, 
                 {Object.entries(nodesByCategory).length > 0 ? (
                   Object.entries(nodesByCategory).map(([category, categoryNodes]) => (
                     <Box key={category} mb={6}>
-                      <Text 
+                      {/* <Text 
                         fontSize="sm" 
                         fontWeight="bold" 
                         color="gray.400" 
@@ -417,7 +528,7 @@ const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error, 
                         letterSpacing="wider"
                       >
                         {category}
-                      </Text>
+                      </Text> */}
                       <SimpleGrid columns={1} spacing={2}>
                         {categoryNodes.map((node) => (
                           <Box
@@ -464,6 +575,7 @@ const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error, 
                                       e.stopPropagation();
                                       e.preventDefault();
                                       onViewCode?.(node);
+                                      //OpenJupyter(node.file_name);
                                     }}
                                     onMouseDown={(e) => {
                                       e.stopPropagation();

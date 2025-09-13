@@ -19,9 +19,23 @@ import {
   Divider,
   Progress,
   Spinner,
+  Select,
+  Badge,
 } from '@chakra-ui/react';
 import { AttachmentIcon, CloseIcon, CheckIcon } from '@chakra-ui/icons';
 import { useNavigate } from 'react-router-dom';
+
+// カテゴリ定義
+const CATEGORIES = {
+  analysis: { label: 'Analysis', color: 'blue', description: 'Data analysis and statistics' },
+  io: { label: 'I/O', color: 'green', description: 'Input/output operations' },
+  network: { label: 'Network', color: 'purple', description: 'Network and communication' },
+  optimization: { label: 'Optimization', color: 'orange', description: 'Optimization algorithms' },
+  simulation: { label: 'Simulation', color: 'red', description: 'Simulation and modeling' },
+  stimulus: { label: 'Stimulus', color: 'teal', description: 'Stimulus generation and control' }
+} as const;
+
+type CategoryKey = keyof typeof CATEGORIES;
 
 // APIレスポンスの型定義
 interface UploadResponse {
@@ -35,6 +49,7 @@ interface UploadResponse {
   is_analyzed: boolean;
   analysis_error: string | null;
   node_classes_count: number;
+  category?: CategoryKey;
   created_at: string;
   updated_at: string;
 }
@@ -48,6 +63,7 @@ const BoxUpload: React.FC = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [fileName, setFileName] = useState<string>('');
   const [description, setDescription] = useState<string>('');
+  const [category, setCategory] = useState<CategoryKey>('analysis');
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [uploadedFiles, setUploadedFiles] = useState<UploadResponse[]>([]);
@@ -180,11 +196,12 @@ const BoxUpload: React.FC = () => {
     }
   };
 
-  const uploadFile = async (file: File, name?: string, desc?: string): Promise<UploadResponse> => {
+  const uploadFile = async (file: File, name?: string, desc?: string, cat?: CategoryKey): Promise<UploadResponse> => {
     const formData = new FormData();
     formData.append('file', file);
     if (name) formData.append('name', name);
     if (desc) formData.append('description', desc);
+    if (cat) formData.append('category', cat);
 
     const response = await fetch('/api/box/upload/', {
       method: 'POST',
@@ -234,7 +251,7 @@ const BoxUpload: React.FC = () => {
         const fileNameToUse = selectedFiles.length === 1 ? fileName : file.name.replace(/\.py$/, '');
         
         try {
-          const result = await uploadFile(file, fileNameToUse, description);
+          const result = await uploadFile(file, fileNameToUse, description, category);
           newUploadedFiles.push(result);
           
           // プログレス更新
@@ -267,6 +284,7 @@ const BoxUpload: React.FC = () => {
         setSelectedFiles([]);
         setFileName('');
         setDescription('');
+        setCategory('analysis');
       }
 
     } catch (error) {
@@ -288,12 +306,14 @@ const BoxUpload: React.FC = () => {
     setSelectedFiles([]);
     setFileName('');
     setDescription('');
+    setCategory('analysis');
     setUploadedFiles([]);
     navigate(-1);
   };
 
   return (
-    <VStack spacing={6} width="100%" p={6} maxWidth="600px" mx="auto">
+    <Box height="100%" width="100%" overflow="auto" bg="gray.900">
+      <VStack spacing={6} width="100%" p={6} maxWidth="600px" mx="auto" minHeight="100vh">
       <Text fontSize="2xl" fontWeight="bold" mb={2} color="white">
         📁 Python File Upload
       </Text>
@@ -423,10 +443,21 @@ const BoxUpload: React.FC = () => {
                 >
                   <HStack>
                     <Icon as={CheckIcon} color="green.400" />
-                    <Box>
-                      <Text fontWeight="medium" color="white">
-                        {file.name}
-                      </Text>
+                    <Box flex="1">
+                      <HStack spacing={2} mb={1}>
+                        <Text fontWeight="medium" color="white">
+                          {file.name}
+                        </Text>
+                        {file.category && (
+                          <Badge
+                            colorScheme={CATEGORIES[file.category].color}
+                            variant="subtle"
+                            size="sm"
+                          >
+                            {CATEGORIES[file.category].label}
+                          </Badge>
+                        )}
+                      </HStack>
                       <Text fontSize="sm" color="gray.300">
                         {file.is_analyzed ? (
                           `Analyzed: ${file.node_classes_count} node classes found`
@@ -470,6 +501,39 @@ const BoxUpload: React.FC = () => {
               When multiple files are selected, individual file names will be used
             </Text>
           )}
+        </FormControl>
+
+        <FormControl isRequired>
+          <FormLabel htmlFor="category" fontSize="sm" fontWeight="semibold" color="white">
+            Category
+          </FormLabel>
+          <Select
+            id="category"
+            value={category}
+            onChange={(e) => setCategory(e.target.value as CategoryKey)}
+            disabled={isUploading}
+            borderColor="gray.300"
+            _hover={{ borderColor: "blue.300" }}
+            _focus={{ borderColor: "blue.500", boxShadow: "0 0 0 1px #3182ce" }}
+            bg="white"
+            color="gray.800"
+          >
+            {Object.entries(CATEGORIES).map(([key, value]) => (
+              <option key={key} value={key} style={{ color: '#2D3748' }}>
+                {value.label} - {value.description}
+              </option>
+            ))}
+          </Select>
+          <HStack mt={2} spacing={2}>
+            <Text fontSize="xs" color="gray.400">Selected:</Text>
+            <Badge
+              colorScheme={CATEGORIES[category].color}
+              variant="subtle"
+              fontSize="xs"
+            >
+              {CATEGORIES[category].label}
+            </Badge>
+          </HStack>
         </FormControl>
 
         <FormControl>
@@ -533,7 +597,8 @@ const BoxUpload: React.FC = () => {
           </Button>
         </GridItem>
       </Grid>
-    </VStack>
+      </VStack>
+    </Box>
   );
 };
 

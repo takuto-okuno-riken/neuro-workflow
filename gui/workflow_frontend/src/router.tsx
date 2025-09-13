@@ -1,15 +1,10 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { Grid, GridItem, Box } from '@chakra-ui/react';
+import { Grid, GridItem } from '@chakra-ui/react';
 import Header from './shared/header/header';
-import HomeView from './views/home/homeView';
-import FileView from './views/file/fileListView';
-import NotFoundView from './views/notFound/notFound';
-import BoxUpload from './views/box/uploadView';
-import FileListView from './views/file/fileListView';
-import CreateFlowPj from './views/file/createView';
 import LoginView from './views/login/loginView';
 import ProtectedRoute from './protectedRoute';
 import { AuthProvider } from './auth/authContext';
+import TabManager from './components/tabs/TabManager';
 
 function Router() {
   return (
@@ -37,17 +32,8 @@ function Router() {
                     <Header />
                   </GridItem>
 
-                  <GridItem area="main" overflowY="auto" pt="0">
-                    <Box p={4}>
-                      <Routes>
-                        <Route path="/" element={<HomeView />} />
-                        <Route path="/file" element={<FileView />} />
-                        <Route path="/file/open" element={<FileListView />} />
-                        <Route path="/file/new" element={<CreateFlowPj />} />
-                        <Route path="/box/upload" element={<BoxUpload />} />
-                        <Route path="/*" element={<NotFoundView />} />
-                      </Routes>
-                    </Box>
+                  <GridItem area="main" overflowY="hidden" pt="0">
+                    <TabManager />
                   </GridItem>
                 </Grid>
               </ProtectedRoute>
