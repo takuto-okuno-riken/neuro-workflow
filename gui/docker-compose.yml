@@ -6,8 +6,8 @@ services:
       - postgres_data:/var/lib/postgresql/data/
     env_file:
       - ./workflow_backend/.env
-    ports:
-      - "5432:5432"
+    # ports:
+    #   - "5432:5432"
     networks:
       - workflow
 
@@ -20,8 +20,8 @@ services:
       - ./workflow_backend:/django-app
       - ${NODES_DIR}:/django-app/django-project/nodes
     working_dir: /django-app
-    ports:
-      - "3000:3000"
+    # ports:
+    #   - "3000:3000"
     env_file:
       - ./workflow_backend/.env
     depends_on:
