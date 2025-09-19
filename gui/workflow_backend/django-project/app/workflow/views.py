@@ -68,7 +68,8 @@ class FlowProjectViewSet(viewsets.ModelViewSet):
         """プロジェクト作成時にPythonファイルを生成"""
         try:
             code_service = CodeGenerationService()
-            code_file = code_service.get_code_file_path(project.id)
+            project_name = project.name.replace(" ","").capitalize()
+            code_file = code_service.get_code_file_path(project_name)
 
             # 基本テンプレートを作成
             python_code = code_service._create_base_template(project)
@@ -487,7 +488,10 @@ class JupyterLabView(APIView):
             project = get_object_or_404(FlowProject, id=workflow_id)
             
             # JupyterLabのURL生成
-            jupyter_url = f"http://localhost:8000/user/user1/lab/tree/projects/{workflow_id}"
+            #jupyter_url = f"http://localhost:8000/user/user1/lab/tree/codes/projects/{workflow_id}"
+            jupyter_url = f"http://localhost:8000/user/user1/lab/tree/codes/projects/"
+            #jupyter_url = f"http://localhost:8000/user/user1/lab/workspaces/auto-E/tree/codes/nodes/{workflow_id}/{workflow_id}.py"
+            
             
             return JsonResponse({
                 "status": "success",
@@ -505,9 +509,202 @@ class JupyterLabView(APIView):
 
 
 @method_decorator(csrf_exempt, name="dispatch")
+class FlowNodeParameterUpdateView(APIView):
+    """FlowNodeのschema.parametersを更新する（ベースノードは変更しない）"""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def put(self, request, workflow_id, node_id):
+        """FlowNodeのschema.parameters内の特定パラメーターを更新"""
+        try:
+            # プロジェクトの存在確認
+            project = get_object_or_404(FlowProject, id=workflow_id)
+
+            # ノードの存在確認
+            node = get_object_or_404(FlowNode, id=node_id, project=project)
+
+            # デバッグ: リクエストデータを出力
+            print(f"🔍 DEBUG: Request data: {request.data}", flush=True)
+            print(f"🔍 DEBUG: Current node data: {node.data}", flush=True)
+
+            # リクエストデータの検証
+            parameter_key = request.data.get("parameter_key")
+            parameter_value = request.data.get("parameter_value")
+            parameter_field = request.data.get("parameter_field", "value")  # 'value', 'default_value', 'constraints'
+
+            print(f"🔍 DEBUG: Parsed - parameter_key: {parameter_key}, parameter_value: {parameter_value}, parameter_field: {parameter_field}", flush=True)
+
+            if not parameter_key:
+                return Response(
+                    {"error": "parameter_key is required"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if parameter_value is None:
+                return Response(
+                    {"error": "parameter_value is required"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            logger.info(f"Updating parameter '{parameter_key}.{parameter_field}' to {parameter_value} in node {node_id}")
+
+            # schema.parametersが存在するかチェック
+            if "schema" not in node.data:
+                print("❌ DEBUG: No schema found in node data", flush=True)
+                return Response(
+                    {"error": "Node schema not found"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if "parameters" not in node.data["schema"]:
+                print("❌ DEBUG: No parameters found in schema", flush=True)
+                return Response(
+                    {"error": "Node parameters not found in schema"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if parameter_key not in node.data["schema"]["parameters"]:
+                available_keys = list(node.data["schema"]["parameters"].keys())
+                print(f"❌ DEBUG: Parameter '{parameter_key}' not found. Available: {available_keys}", flush=True)
+                return Response(
+                    {"error": f"Parameter '{parameter_key}' not found. Available: {available_keys}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # 更新前の値を取得
+            old_value = node.data["schema"]["parameters"][parameter_key].get(parameter_field)
+            print(f"🔍 DEBUG: Updating {parameter_key}.{parameter_field} from {old_value} to {parameter_value}", flush=True)
+
+            # 元の値を保存（変更履歴用）
+            original_value = node.data["schema"]["parameters"][parameter_key].get(parameter_field)
+
+            # parameter_fieldで指定されたフィールドを直接更新
+            print(f"🔍 DEBUG: Before update - schema.parameters[{parameter_key}]: {node.data['schema']['parameters'][parameter_key]}", flush=True)
+            node.data["schema"]["parameters"][parameter_key][parameter_field] = parameter_value
+            print(f"🔍 DEBUG: After update - schema.parameters[{parameter_key}]: {node.data['schema']['parameters'][parameter_key]}", flush=True)
+
+            print(f"🔍 DEBUG: Updated {parameter_field} from {original_value} to {parameter_value}", flush=True)
+
+            # パラメーター変更状況を追跡（全フィールドを対象に変更）
+            self._update_parameter_modification_status(
+                node.data, parameter_key, parameter_field,
+                node.data["schema"]["parameters"][parameter_key],
+                parameter_value,
+                original_value
+            )
+
+            # ノードを保存
+            node.save()
+
+            print(f"✅ DEBUG: Successfully saved parameter update", flush=True)
+            print(f"🔍 DEBUG: After save - node.data keys: {list(node.data.keys())}", flush=True)
+            print(f"🔍 DEBUG: After save - parameter_modifications: {node.data.get('parameter_modifications', 'NOT FOUND')}", flush=True)
+
+            logger.info(f"Successfully updated parameter '{parameter_key}.{parameter_field}' in node {node_id}")
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": f"Parameter '{parameter_key}.{parameter_field}' updated successfully",
+                    "node_id": node_id,
+                    "workflow_id": str(workflow_id),
+                    "parameter_key": parameter_key,
+                    "parameter_field": parameter_field,
+                    "parameter_value": parameter_value,
+                    "updated_parameter": node.data["schema"]["parameters"][parameter_key]
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"Parameter update failed for node {node_id}: {e}", exc_info=True)
+            return Response(
+                {"error": f"Parameter update failed: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+    def _update_parameter_modification_status(self, node_data, parameter_key, parameter_field, parameter, new_value, original_value=None):
+        """パラメーターの変更状況を追跡・更新（全フィールド対応）"""
+        print(f"🔍 DEBUG: Tracking modification status for {parameter_key}.{parameter_field}", flush=True)
+
+        # parameter_modificationsの構造を確保
+        if "parameter_modifications" not in node_data:
+            node_data["parameter_modifications"] = {}
+
+        modifications = node_data["parameter_modifications"]
+
+        # パラメーター単位での追跡データ構造を確保
+        if parameter_key not in modifications:
+            modifications[parameter_key] = {
+                "is_modified": False,
+                "field_modifications": {}
+            }
+
+        param_mod = modifications[parameter_key]
+
+        # 既存データの互換性確保（古い形式から新しい形式への変換）
+        if "field_modifications" not in param_mod:
+            # 古い形式のデータを新しい形式に変換
+            old_original = param_mod.get("original_value")
+            old_current = param_mod.get("current_value")
+            param_mod["field_modifications"] = {}
+
+            # 古いデータが存在する場合、default_valueとして移行
+            if old_original is not None:
+                param_mod["field_modifications"]["default_value_original"] = old_original
+                param_mod["field_modifications"]["default_value"] = {
+                    "current_value": old_current,
+                    "is_modified": param_mod.get("is_modified", False),
+                    "modified_at": param_mod.get("modified_at")
+                }
+
+            # 古いキーを削除
+            for old_key in ["original_value", "current_value", "modified_at"]:
+                if old_key in param_mod:
+                    del param_mod[old_key]
+
+        # 各フィールドの元の値を取得（初回時のみ保存）
+        field_key = f"{parameter_field}_original"
+        if field_key not in param_mod["field_modifications"]:
+            # 初回変更時に元の値を保存
+            param_mod["field_modifications"][field_key] = original_value
+
+        # 現在の値と元の値を比較して変更状況を判定
+        original_field_value = param_mod["field_modifications"][field_key]
+        is_field_modified = new_value != original_field_value
+
+        print(f"🔍 DEBUG: {parameter_field} - original={original_field_value}, new={new_value}, modified={is_field_modified}", flush=True)
+
+        # フィールドの変更状況を更新
+        param_mod["field_modifications"][parameter_field] = {
+            "current_value": new_value,
+            "is_modified": is_field_modified,
+            "modified_at": None  # フロントエンドで現在時刻を設定することを想定
+        }
+
+        # パラメーター全体の変更状況を更新（いずれかのフィールドが変更されていれば True）
+        param_mod["is_modified"] = any(
+            field_data.get("is_modified", False)
+            for field_name, field_data in param_mod["field_modifications"].items()
+            if isinstance(field_data, dict) and not field_name.endswith("_original")
+        )
+
+        # 全フィールドが元の値に戻った場合はパラメーター全体を削除
+        if not param_mod["is_modified"]:
+            del modifications[parameter_key]
+
+        # 全体の変更状況を更新
+        node_data["has_parameter_modifications"] = len(modifications) > 0
+
+        print(f"✅ DEBUG: Parameter '{parameter_key}.{parameter_field}' modification status: {'modified' if is_field_modified else 'default'}", flush=True)
+        print(f"🔍 DEBUG: Final modifications data: {modifications}", flush=True)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
 class BatchCodeGenerationView(APIView):
     """React FlowのJSONからバッチでコード生成するビュー"""
-    
+
     permission_classes = [AllowAny]
     authentication_classes = []
 
@@ -516,62 +713,63 @@ class BatchCodeGenerationView(APIView):
         try:
             # プロジェクトの存在確認
             project = get_object_or_404(FlowProject, id=workflow_id)
-            
+
             # リクエストボディからReact FlowのJSONデータを取得
             data = json.loads(request.body)
             nodes_data = data.get("nodes", [])
             edges_data = data.get("edges", [])
-            
+
             logger.info(f"Batch code generation for project {workflow_id}: {len(nodes_data)} nodes, {len(edges_data)} edges")
-            
-            # フローデータを保存（既存の処理を再利用）
-            with transaction.atomic():
-                FlowService.save_flow_data(str(workflow_id), nodes_data, edges_data)
-                
-                # コード生成サービスを使用して一括でコード生成
-                code_service = CodeGenerationService()
-                success = code_service.generate_code_from_flow_data(str(workflow_id), nodes_data, edges_data)
-                
-                response_data = {
-                    "status": "success",
-                    "message": f"Code generated from {len(nodes_data)} nodes and {len(edges_data)} edges",
-                    "workflow_id": str(workflow_id),
-                    "nodes_processed": len(nodes_data),
-                    "edges_processed": len(edges_data)
+
+            # コード生成サービスを使用して一括でコード生成
+            code_service = CodeGenerationService()
+            # 補正したプロジェクト名
+            project_name = project.name.replace(" ","").capitalize()
+            success = code_service.generate_code_from_flow_data(str(workflow_id), project_name, nodes_data, edges_data)
+
+            response_data = {
+                "status": "success",
+                "message": f"Code generated from {len(nodes_data)} nodes and {len(edges_data)} edges",
+                "workflow_id": str(workflow_id),
+                "nodes_processed": len(nodes_data),
+                "edges_processed": len(edges_data)
+            }
+
+            if success:
+                response_data["code_status"] = "Code generation completed successfully"
+                # Idからプロジェクトを取得
+                project = FlowProject.objects.get(id=workflow_id)
+                project_name = project.name.replace(" ","").capitalize()
+
+                # 生成されたコードファイルのパスを返す
+                code_file = code_service.get_code_file_path(project_name)
+                notebook_file = code_service.get_notebook_file_path(project_name)
+
+                response_data["files"] = {
+                    "python_file": str(code_file),
+                    "notebook_file": str(notebook_file),
+                    "python_exists": code_file.exists(),
+                    "notebook_exists": notebook_file.exists()
                 }
-                
-                if success:
-                    response_data["code_status"] = "Code generation completed successfully"
-                    
-                    # 生成されたコードファイルのパスを返す
-                    code_file = code_service.get_code_file_path(workflow_id)
-                    notebook_file = code_service.get_notebook_file_path(workflow_id)
-                    
-                    response_data["files"] = {
-                        "python_file": str(code_file),
-                        "notebook_file": str(notebook_file),
-                        "python_exists": code_file.exists(),
-                        "notebook_exists": notebook_file.exists()
-                    }
-                else:
-                    response_data["code_status"] = "Code generation failed"
-                    response_data["error"] = "Code generation process encountered errors"
-                
-                return Response(response_data, status=status.HTTP_200_OK)
-                
+            else:
+                response_data["code_status"] = "Code generation failed"
+                response_data["error"] = "Code generation process encountered errors"
+
+            return Response(response_data, status=status.HTTP_200_OK)
+
         except json.JSONDecodeError:
             return Response(
-                {"error": "Invalid JSON format"}, 
+                {"error": "Invalid JSON format"},
                 status=status.HTTP_400_BAD_REQUEST
             )
         except FlowProject.DoesNotExist:
             return Response(
-                {"error": f"Project {workflow_id} not found"}, 
+                {"error": f"Project {workflow_id} not found"},
                 status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
             logger.error(f"Error in batch code generation for project {workflow_id}: {e}")
             return Response(
-                {"error": f"Batch code generation failed: {str(e)}"}, 
+                {"error": f"Batch code generation failed: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

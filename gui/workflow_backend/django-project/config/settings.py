@@ -204,7 +204,7 @@ STATIC_URL = "static/"
 MEDIA_URL = "nodes/"
 
 # 変更必須
-MEDIA_ROOT = os.path.join(BASE_DIR, "nodes")
+MEDIA_ROOT = os.path.join(BASE_DIR, "codes/nodes")
 
 # ==============================================================================
 # FILE UPLOAD SETTINGS

@@ -5,6 +5,7 @@ from .views import (
     FlowEdgeViewSet,
     SampleFlowView,
     BatchCodeGenerationView,
+    FlowNodeParameterUpdateView,
 )
 
 app_name = "workflow"
@@ -62,10 +63,16 @@ urlpatterns = [
         edge_detail,
         name="workflow-edge-detail",
     ),  # DELETE(削除)
+    # ノードパラメーター更新
+    path(
+        "<uuid:workflow_id>/nodes/<str:node_id>/parameters/",
+        FlowNodeParameterUpdateView.as_view(),
+        name="node-parameter-update"
+    ),  # PUT(ノードのschema.parametersを更新)
     # バッチコード生成 - 新規追加
     path(
-        "<uuid:workflow_id>/generate-code/", 
-        BatchCodeGenerationView.as_view(), 
+        "<uuid:workflow_id>/generate-code/",
+        BatchCodeGenerationView.as_view(),
         name="batch-code-generation"
     ),  # POST(React Flow JSONからバッチでコード生成)
     # サンプルデータ
@@ -100,6 +107,9 @@ GET    /workflow/{workflow_id}/edges/          # エッジ一覧
 POST   /workflow/{workflow_id}/edges/          # エッジ作成
 DELETE /workflow/{workflow_id}/edges/{edge_id}/ # エッジ削除
 
+# ノードパラメーター更新
+PUT    /workflow/{workflow_id}/nodes/{node_id}/parameters/  # ノードのschema.parametersを更新
+
 # バッチコード生成
 POST   /workflow/{workflow_id}/generate-code/  # React Flow JSONからバッチでコード生成
 
@@ -107,6 +117,22 @@ POST   /workflow/{workflow_id}/generate-code/  # React Flow JSONからバッチ�
 GET    /workflow/sample-flow/                  # サンプルフローデータ取得
 
 リクエスト例:
+
+# ノードパラメーター更新
+PUT /workflow/{workflow_id}/nodes/{node_id}/parameters/
+{
+  "parameter_key": "record_from_population",
+  "parameter_value": 100,
+  "parameter_field": "value"  # 'value', 'default_value', 'constraints', 'description', 'type'
+}
+Response: {
+  "status": "success",
+  "message": "Parameter 'record_from_population.value' updated successfully",
+  "node_id": "node_id",
+  "parameter_key": "record_from_population",
+  "parameter_field": "value",
+  "parameter_value": 100
+}
 
 # バッチコード生成
 POST /workflow/{workflow_id}/generate-code/

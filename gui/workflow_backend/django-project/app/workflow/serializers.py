@@ -41,6 +41,10 @@ class FlowProjectSerializer(serializers.ModelSerializer):
 
 
 class FlowNodeSerializer(serializers.ModelSerializer):
+    has_parameter_modifications = serializers.SerializerMethodField()
+    modified_parameters = serializers.SerializerMethodField()
+    parameter_modification_count = serializers.SerializerMethodField()
+
     class Meta:
         model = FlowNode
         fields = [
@@ -52,8 +56,23 @@ class FlowNodeSerializer(serializers.ModelSerializer):
             "data",
             "created_at",
             "updated_at",
+            "has_parameter_modifications",
+            "modified_parameters",
+            "parameter_modification_count",
         ]
-        read_only_fields = ["created_at", "updated_at"]
+        read_only_fields = ["created_at", "updated_at", "has_parameter_modifications", "modified_parameters", "parameter_modification_count"]
+
+    def get_has_parameter_modifications(self, obj):
+        """パラメーター変更があるかどうか"""
+        return obj.has_parameter_modifications()
+
+    def get_modified_parameters(self, obj):
+        """変更されたパラメーターの詳細"""
+        return obj.get_modified_parameters()
+
+    def get_parameter_modification_count(self, obj):
+        """変更されたパラメーターの数"""
+        return obj.get_parameter_modification_count()
 
     def validate(self, data):
         # React Flow形式のバリデーション

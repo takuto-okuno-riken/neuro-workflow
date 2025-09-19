@@ -33,11 +33,11 @@ c.DockerSpawner.volumes = {
         "bind": "/home/jovyan/neuro",
         "mode": "ro",
     },
-    f"{host_project_path}/upload_nodes": {
-        "bind": "/home/jovyan/upload_nodes",
+    f"{host_project_path}/codes/nodes": {
+        "bind": "/home/jovyan/codes/nodes",
         "mode": "rw",
     },
-    f"{host_project_path}/projects": {"bind": "/home/jovyan/projects", "mode": "rw"},
+    f"{host_project_path}/codes/projects": {"bind": "/home/jovyan/codes/projects", "mode": "rw"},
     # "jupyterhub-user-{username}": {"bind": "/home/jovyan/work", "mode": "rw"},
 }
 

@@ -41,6 +41,27 @@ class FlowNode(models.Model):
     def __str__(self):
         return f"Node {self.id} in {self.project.name}"
 
+    def has_parameter_modifications(self):
+        """パラメーターに変更があるかチェック"""
+        return self.data.get("has_parameter_modifications", False)
+
+    def get_modified_parameters(self):
+        """変更されたパラメーターの一覧を取得"""
+        modifications = self.data.get("parameter_modifications", {})
+        return {
+            param_key: {
+                "original_value": param_info.get("original_value"),
+                "current_value": param_info.get("current_value"),
+                "modified_at": param_info.get("modified_at")
+            }
+            for param_key, param_info in modifications.items()
+            if param_info.get("is_modified", False)
+        }
+
+    def get_parameter_modification_count(self):
+        """変更されたパラメーターの数を取得"""
+        return len(self.get_modified_parameters())
+
 
 class FlowEdge(models.Model):
     id = models.CharField(max_length=255, primary_key=True)  # React Flow edge ID
