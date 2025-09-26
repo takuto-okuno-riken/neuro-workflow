@@ -1,4 +1,4 @@
-FROM nest/nest-simulator:3.0
+FROM nest/nest-simulator:3.7
 
 # Override the default ENTRYPOINT to allow CMD to work
 ENTRYPOINT []
