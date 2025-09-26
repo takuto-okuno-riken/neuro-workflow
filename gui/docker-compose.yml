@@ -18,7 +18,7 @@ services:
     command: bash -c "python3 django-project/manage.py makemigrations && python3 django-project/manage.py migrate && python3 django-project/manage.py runserver 0.0.0.0:3000"
     volumes:
       - ./workflow_backend:/django-app
-      - ${NODES_DIR}:/django-app/django-project/nodes
+      - ${NODES_DIR}:/django-app/django-project/codes/nodes
     working_dir: /django-app
     # ports:
     #   - "3000:3000"
