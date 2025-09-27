@@ -127,6 +127,7 @@ Additionally, parameters can be marked as optimizable, which indicates that thei
 This optimization metadata is particularly useful for parameter sweeps, hyperparameter tuning, and automated optimization of neural simulation parameters.
 
 Example of an optimizable parameter:
+
 ```python
 'learning_rate': ParameterDefinition(
     default_value=0.01,
@@ -160,15 +161,6 @@ When defining parameters, you can specify:
 )
 ```
 
-### Use Cases for Parameter Optimization
-
-Parameter optimization is particularly useful for:
-
-1. **Hyperparameter Tuning**: Finding optimal learning rates, thresholds, or other model parameters
-2. **Model Fitting**: Adjusting parameters to fit experimental data
-3. **Sensitivity Analysis**: Understanding how parameter changes affect simulation outcomes
-4. **Automated Workflows**: Creating automated pipelines that can optimize parameters without manual intervention
-
 ### Optimization Strategies
 
 The optimization metadata enables various optimization strategies:
@@ -197,45 +189,6 @@ A key component of parameter optimization is the objective function, which evalu
 1. Take simulation results and target values as input
 2. Return an error or fitness value
 3. Can be customized for specific optimization goals
-
-Example of a custom objective function:
-
-```python
-def custom_objective_function(simulation_results, objective_target):
-    """Custom objective function for neuron optimization."""
-    # Extract relevant metrics from simulation results
-    spike_count = len(simulation_results['spike_times'])
-    
-    # Calculate primary error (difference from target spike count)
-    count_error = abs(spike_count - objective_target)
-    
-    # Add additional constraints or metrics
-    timing_error = 0
-    if spike_count >= 2:
-        # Calculate inter-spike intervals
-        isis = [simulation_results['spike_times'][i+1] - simulation_results['spike_times'][i] 
-               for i in range(spike_count-1)]
-        # Penalize ISIs that are too short
-        for isi in isis:
-            if isi < 10:  # ms
-                timing_error += (10 - isi) * 0.1
-    
-    # Combine errors into a single value
-    total_error = count_error + timing_error
-    
-    return {'error': total_error}
-```
-
-Objective functions can be passed to optimization nodes, allowing for flexible optimization strategies that can be tailored to specific research questions or simulation goals.
-
-#### Workflow-Level Optimization
-
-While individual nodes can contain optimization algorithms, the recommended approach is to implement the optimization loop at the workflow level. This provides several advantages:
-
-1. **Clear Separation of Concerns**: Each node focuses on its specific task (setup, simulation, evaluation)
-2. **Explicit Data Flow**: Data flows explicitly between nodes through their ports
-3. **Flexibility**: The optimization strategy can be changed without modifying the nodes
-4. **Transparency**: The optimization process is visible and controllable at the workflow level
 
 #### Connecting Nodes in a Workflow
 
@@ -268,42 +221,11 @@ workflow = (
 ```
 
 The `connect` method takes four arguments:
+
 1. Source node name
 2. Source port name
 3. Target node name
 4. Target port name
-
-#### Simple Optimization Loop
-
-With properly connected nodes, the optimization loop becomes much simpler because data flows automatically between nodes:
-
-```python
-# Run optimization loop at the workflow level
-iteration = 0
-
-# For the first iteration, we need to manually set up the neuron and stimulus
-setup_node.create_neuron({})  # Start with default parameters
-stimulus_node.generate_stimulus(simulation_time, dt)  # Generate initial stimulus
-
-while iteration < max_iterations:
-    # Run simulation - all inputs are automatically passed through connections
-    # The neuron model comes from the setup node
-    # The input current comes from the stimulus node
-    simulation_node.simulate(simulation_time)
-    
-    # Evaluate results with the objective target
-    # The simulation results are automatically passed from the simulation node
-    eval_result = optimization_node.evaluate(objective_target, iteration)
-    
-    # The optimization node automatically suggests new parameters
-    # and passes them to the setup node through the connected workflow
-    
-    iteration += 1
-```
-
-This is the power of a properly connected workflow - the data flows automatically between nodes, making the code much cleaner and more maintainable.
-
-This approach allows for flexible and powerful optimization of neural simulation parameters across multiple nodes in a workflow, with clear separation of concerns and explicit data flow.
 
 ## Methods
 
@@ -325,7 +247,7 @@ Process steps define the execution sequence within a node. Each step corresponds
 
 ```python
 class ProcessStep:
-    def __init__(self, name: str, method: Callable, description: str = "", 
+    def __init__(self, name: str, method: Callable, description: str = "",
                 inputs: List[str] = None, outputs: List[str] = None, method_key: str = None):
         # ...
 ```
@@ -369,18 +291,18 @@ class MyCustomNode(Node):
             # More methods...
         }
     )
-    
+
     def __init__(self, name: str):
         super().__init__(name)
         self._define_process_steps()
-    
+
     def _define_process_steps(self) -> None:
         self.add_process_step(
             "process_data",
             self.process_data,
             method_key="process_data"
         )
-    
+
     def process_data(self, input1: int) -> Dict[str, float]:
         # Process the input and return the output
         result = float(input1) * self._parameters['param1']
@@ -396,7 +318,7 @@ class SpikeAnalysisNode(Node):
     NODE_DEFINITION = NodeDefinitionSchema(
         type='spike_analysis',
         description='Analyzes spike trains from neural simulations',
-        
+
         parameters={
             'time_window': ParameterDefinition(
                 default_value=[0.0, 1000.0],
@@ -418,21 +340,21 @@ class SpikeAnalysisNode(Node):
                 optimization_range=[0.2, 0.8]
             )
         },
-        
+
         inputs={
             'spike_data': PortDefinition(
                 type=PortType.OBJECT,
                 description='Spike recorder data from simulation'
             )
         },
-        
+
         outputs={
             'firing_rates': PortDefinition(
                 type=PortType.DICT,
                 description='Firing rates for each neuron'
             )
         },
-        
+
         methods={
             'calculate_rates': MethodDefinition(
                 description='Calculate firing rates',
@@ -441,18 +363,18 @@ class SpikeAnalysisNode(Node):
             )
         }
     )
-    
+
     def __init__(self, name: str):
         super().__init__(name)
         self._define_process_steps()
-    
+
     def _define_process_steps(self) -> None:
         self.add_process_step(
             "calculate_rates",
             self.calculate_rates,
             method_key="calculate_rates"
         )
-    
+
     def calculate_rates(self, spike_data: Dict[str, Any]) -> Dict[str, Dict[int, float]]:
         # Implementation of firing rate calculation
         # ...
