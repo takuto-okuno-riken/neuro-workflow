@@ -1,7 +1,8 @@
+name: neuro-workflow
+
 services:
   db:
     image: postgres:16
-    container_name: db
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     env_file:
@@ -11,10 +12,8 @@ services:
     networks:
       - workflow
 
-  # === Django サービス ===
-  web:
+  backend:
     build: ./workflow_backend
-    container_name: web
     command: bash -c "python3 django-project/manage.py makemigrations && python3 django-project/manage.py migrate && python3 django-project/manage.py runserver 0.0.0.0:3000"
     volumes:
       - ./workflow_backend:/django-app
@@ -31,7 +30,6 @@ services:
 
   jupyterhub:
     build: ./workflow_backend/django-project/neuroworkflow
-    container_name: jupyterhub
     ports:
       - "8000:8000"
     env_file:
@@ -48,14 +46,13 @@ services:
 
   frontend:
     build: ./workflow_frontend
-    container_name: workflow_frontend
     command: npm run dev:docker
     ports:
       - "5173:5173"
     env_file:
       - ./workflow_frontend/.env
     depends_on:
-      - web
+      - backend 
     networks:
       - workflow
 
