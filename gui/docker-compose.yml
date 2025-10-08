@@ -56,6 +56,20 @@ services:
     networks:
       - workflow
 
+  mcp:
+    build: ./mcp_server
+    command: python3 ./proxy.py
+    environment:
+      - MCP_PROXY_PORT=8001
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./mcp_server/mcp_config.json:/app/mcp_config.json
+    depends_on:
+      - backend 
+    networks:
+      - workflow
+
 volumes:
   postgres_data:
   jupyterhub-data:
