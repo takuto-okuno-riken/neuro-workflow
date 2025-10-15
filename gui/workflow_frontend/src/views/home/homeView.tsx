@@ -34,6 +34,7 @@ import {
   useToast,
   VStack,
   Badge,
+  IconButton,
 } from '@chakra-ui/react';
 import { ViewIcon } from '@chakra-ui/icons';
 import { CodeEditorModal } from './components/codeEditorModal';
@@ -50,6 +51,7 @@ import { useUploadedNodes } from '../../hooks/useUploadedNodes';
 import NodeDetailsContent from './components/nodeDetailModal';
 import { DeleteConfirmDialog } from './components/deleteConfirmDialog';
 import { useTabContext } from '../../components/tabs/TabManager';
+import { FiMenu } from 'react-icons/fi';
 
 const HomeView = () => {
   const toast = useToast();
@@ -83,9 +85,20 @@ const HomeView = () => {
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const [isDeletingProject, setIsDeletingProject] = useState(false);
 
+  /*
+  const enterTimer = useRef<number | null>(null);
+  const leaveTimer = useRef<number | null>(null);
+  const openDelay = 120; // ms
+  const closeDelay = 180; // ms
+  */
+
   // タブシステムのコンテキストを使用
   const { addJupyterTab } = useTabContext();
 
+  // アイランドメニュー開閉管理
+  const [isIslandCodeOpen, setIslandCodeOpen] = useState(true);
+
+  // ワークフロープロジェクトのソースコード表示
   const handleOpenJupyter = useCallback(async () => {
     if (!selectedProject) {
       toast({
@@ -445,8 +458,8 @@ const HomeView = () => {
   }
 };
 
-  // ノードの個別更新
-  const updateNodeAPI = async (nodeId: string, nodeData: Partial<Node<CalculationNodeData>>) => {
+// ノードの個別更新
+const updateNodeAPI = async (nodeId: string, nodeData: Partial<Node<CalculationNodeData>>) => {
   if (!selectedProject || !autoSaveEnabled) {
     console.log('Skipping node update API call:', { selectedProject, autoSaveEnabled });
     return;
@@ -982,6 +995,12 @@ const HomeView = () => {
     console.log("Node clicked:", node.id);
   }, []);
 
+  const onNodeDragStop = useCallback((event, node) => {
+    console.log("Node Drag Stop:", selectedProject, node.id, node.position.x, node.position.y);
+
+    debouncedSave(() => updateNodeAPI(node.id, node));
+  }, [selectedProject]);
+
   const onEdgeClick: EdgeMouseHandler = useCallback((event, edge) => {
     event.preventDefault();
     
@@ -1126,7 +1145,7 @@ const HomeView = () => {
   }, [selectedEdgeId, setEdges, toast, autoSaveEnabled]);
 
 
-    const onDrop = useCallback(
+  const onDrop = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
       event.preventDefault();
 
@@ -1536,16 +1555,22 @@ const HomeView = () => {
   }, []);
 
   return (
-    <div style={{ width: '100%', height: '100vh', position: 'relative', overflow: 'hidden' }}>
+    <div>
       <SideBoxArea 
+        position="absolute"
+        top="128px"
+        left="32px"
         nodes={uploadedNodes} 
         isLoading={isNodesLoading}  // ノード専用
         error={error}
+        transition="width 200ms ease"
         onRefresh={refetchNodes}
         onNodeInfo={handleSidebarNodeInfo}
         onViewCode={handleSidebarViewCode}
       />
-      <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+
+    <div style={{ width: '100%', height: 'calc(100vh - 106px)', position: 'absolute', overflow: 'hidden' }}>
+      <div style={{ width: '100%', height: '100%', position: 'absolute' }}>
         <style>
           {`
             .react-flow__controls {
@@ -1581,7 +1606,7 @@ const HomeView = () => {
               fill: #8b5cf6;
               stroke: #7c3aed;
             }
-          `}
+        `}
         </style>
         
         {/* プロジェクト選択UI */}
@@ -1593,12 +1618,24 @@ const HomeView = () => {
           autoSaveEnabled={autoSaveEnabled}
           isConnected={isConnected}
         />
-        
+        <IconButton
+          position="absolute"
+          top="16px"
+          right="16px"
+          zIndex={1000}
+          aria-label="メニュー開閉"
+          icon={<FiMenu />}
+          onClick={() => setIslandCodeOpen(!isIslandCodeOpen)}
+          colorScheme="gray"
+          bg="gray.300"
+          _hover={{ bg: 'gray.600' }}
+        />
         {/* 説明 */}
         <Box
           position="absolute"
           top="10px"
-          right="10px"
+          right="10px"          
+          display={isIslandCodeOpen ? 'block' : 'none'}
           p={4}
           bg="white"
           borderRadius="lg"
@@ -1608,108 +1645,109 @@ const HomeView = () => {
           borderWidth={1}
           borderColor="gray.200"
         >
-  <VStack spacing={4} align="stretch">
-    {/* ヘッダー */}
-    <HStack justify="space-between" align="center">
-      <Text fontWeight="bold" fontSize="md" color="gray.800">
-        🔬 Flow Designer
-      </Text>
-      {isConnected ? (
-        <Badge colorScheme="green" size="sm" variant="subtle">
-          Online
-        </Badge>
-      ) : (
-        <Badge colorScheme="red" size="sm" variant="subtle">
-          Offline
-        </Badge>
-      )}
-    </HStack>
-    
-    {/* 説明文 */}
-          <Box>
-            <Text fontSize="sm" color="gray.600" lineHeight="1.4">
-              Drag nodes from the left panel to build mathematical workflows. Connect outputs to inputs to create calculations.
-            </Text>
-          </Box>
-          
-          {/* Tips & Status */}
-          <Box>
-            <Text fontSize="xs" color="blue.600" mb={1}>
-              💡 Tips: Click edges to delete • Press Delete key for selected items
-            </Text>
-            {!autoSaveEnabled && (
-              <Text fontSize="xs" color="orange.600">
-                ⚠️ Auto-save disabled
+          <VStack spacing={4} align="stretch">
+            {/* ヘッダー */}
+            <Box paddingRight={12}>
+              <HStack justify="space-between" align="center">
+                <Text fontWeight="bold" fontSize="md" color="gray.800">
+                  🔬 Flow Designer
+                </Text>
+                {isConnected ? (
+                  <Badge colorScheme="green" size="sm" variant="subtle">
+                    Online
+                  </Badge>
+                ) : (
+                  <Badge colorScheme="red" size="sm" variant="subtle">
+                    Offline
+                  </Badge>
+                )}
+              </HStack>
+            </Box>
+            {/* 説明文 */}
+            <Box>
+              <Text fontSize="sm" color="gray.600" lineHeight="1.4">
+                Drag nodes from the left panel to build mathematical workflows. Connect outputs to inputs to create calculations.
               </Text>
-            )}
-          </Box>
+            </Box>
           
-          {/* Action Buttons */}
-          <VStack spacing={2} align="stretch">
-            <Button
-              leftIcon={<ViewIcon />}
-              colorScheme="purple"
-              variant="outline"
-              size="sm"
-              onClick={handleOpenJupyter}  
-              isDisabled={!selectedProject}
-              _hover={{ bg: "purple.50", transform: "translateY(-1px)" }}
-              _disabled={{ 
-                opacity: 0.4,
-                cursor: "not-allowed"
-              }}
-              transition="all 0.2s"
-            >
-              {selectedProject ? "🚀 Open JupyterLab Tab" : "Select Project First"}
-            </Button>
-            
-            <Button
-              colorScheme="blue"
-              variant="solid"
-              size="sm"
-              onClick={handleGenerateCode}
-              isDisabled={!selectedProject || nodes.length === 0}
-              isLoading={isGeneratingCode}
-              loadingText="Generating..."
-              _hover={{ bg: "blue.600", transform: "translateY(-1px)" }}
-              _disabled={{ 
-                opacity: 0.4,
-                cursor: "not-allowed"
-              }}
-              transition="all 0.2s"
-            >
-              {!selectedProject ? "Select Project First" : 
-               nodes.length === 0 ? "Add Nodes to Generate" : 
-               "📝 Generate Code"}
-            </Button>
-            
-            <Button
-              colorScheme="green"
-              variant="outline"
-              size="sm"
-              onClick={handleExportFlowJSON}
-              isDisabled={!selectedProject || nodes.length === 0}
-              _hover={{ bg: "green.50", transform: "translateY(-1px)" }}
-              _disabled={{ 
-                opacity: 0.4,
-                cursor: "not-allowed"
-              }}
-              transition="all 0.2s"
-            >
-              {nodes.length === 0 ? "No Flow to Export" : "📋 Export Flow JSON"}
-            </Button>
-            
-            
-            {selectedProject && (
-              <Text fontSize="xs" color="gray.500" textAlign="center">
-                Project: {projects.find(p => p.id === selectedProject)?.name || 'Unknown'}
+            {/* Tips & Status */}
+            <Box>
+              <Text fontSize="xs" color="blue.600" mb={1}>
+                💡 Tips: Click edges to delete • Press Delete key for selected items
               </Text>
-            )}
+              {!autoSaveEnabled && (
+                <Text fontSize="xs" color="orange.600">
+                  ⚠️ Auto-save disabled
+                </Text>
+              )}
+            </Box>
+          
+            {/* Action Buttons */}
+            <VStack spacing={2} align="stretch">
+              <Button
+                leftIcon={<ViewIcon />}
+                colorScheme="purple"
+                variant="outline"
+                size="sm"
+                onClick={handleOpenJupyter}  
+                isDisabled={!selectedProject}
+                _hover={{ bg: "purple.50", transform: "translateY(-1px)" }}
+                _disabled={{ 
+                  opacity: 0.4,
+                  cursor: "not-allowed"
+                }}
+                transition="all 0.2s"
+              >
+                {selectedProject ? "🚀 Open JupyterLab Tab" : "Select Project First"}
+              </Button>
+              
+              <Button
+                colorScheme="blue"
+                variant="solid"
+                size="sm"
+                onClick={handleGenerateCode}
+                isDisabled={!selectedProject || nodes.length === 0}
+                isLoading={isGeneratingCode}
+                loadingText="Generating..."
+                _hover={{ bg: "blue.600", transform: "translateY(-1px)" }}
+                _disabled={{ 
+                  opacity: 0.4,
+                  cursor: "not-allowed"
+                }}
+                transition="all 0.2s"
+              >
+                {!selectedProject ? "Select Project First" : 
+                nodes.length === 0 ? "Add Nodes to Generate" : 
+                "📝 Generate Code"}
+              </Button>
+              
+              <Button
+                colorScheme="green"
+                variant="outline"
+                size="sm"
+                onClick={handleExportFlowJSON}
+                isDisabled={!selectedProject || nodes.length === 0}
+                _hover={{ bg: "green.50", transform: "translateY(-1px)" }}
+                _disabled={{ 
+                  opacity: 0.4,
+                  cursor: "not-allowed"
+                }}
+                transition="all 0.2s"
+              >
+                {nodes.length === 0 ? "No Flow to Export" : "📋 Export Flow JSON"}
+              </Button>
+              
+              {selectedProject && (
+                <Text fontSize="xs" color="gray.500" textAlign="center">
+                  Project: {projects.find(p => p.id === selectedProject)?.name || 'Unknown'}
+                </Text>
+              )}
+            </VStack>
           </VStack>
-        </VStack>
-      </Box>
+        </Box>
         
         <ReactFlow
+          position="absolute"
           nodes={nodes}
           edges={edges}
           onNodesChange={handleNodesChange}
@@ -1719,6 +1757,7 @@ const HomeView = () => {
           onDrop={onDrop}
           onDragOver={onDragOver}
           onNodeClick={onNodeClick}
+          onNodeDragStop={onNodeDragStop}
           onEdgeClick={onEdgeClick}
           onPaneClick={onPaneClick}
           nodeTypes={nodeTypes} 
@@ -1826,6 +1865,7 @@ const HomeView = () => {
           isDeleting={isDeletingProject}
         />
       </div>
+    </div>
     </div>
   );
 }

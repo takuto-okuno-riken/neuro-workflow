@@ -35,9 +35,10 @@ import {
 } from '@chakra-ui/react';
 import { useEffect, useState, useRef } from 'react';
 import { IconType } from 'react-icons';
-import { FiBox, FiCopy, FiTrash2, FiInfo, FiCode, FiRefreshCw, FiChevronDown, FiChevronRight } from 'react-icons/fi'; // デフォルトアイコンとして使用
+import { FiBox, FiCopy, FiTrash2, FiInfo, FiCode, FiRefreshCw, FiChevronDown, FiChevronRight, FiMenu } from 'react-icons/fi'; // デフォルトアイコンとして使用
 import { SchemaFields } from '../home/type';
 import { createAuthHeaders } from '../../api/authHeaders';
+import { useTabContext } from '../../components/tabs/TabManager';
 
 interface SidebarProps {
   nodes: UploadedNodesResponse | null;
@@ -71,11 +72,6 @@ interface NodeTypeWithIcon extends Omit<BackendNodeType, 'icon'> {
   icon: IconType;
 }
 
-// Jupyterを別タブで開く
-const OpenJupyter = (filename : string, category : string) => {
-    window.open("http://localhost:8000/user/user1/lab/workspaces/auto-E/tree/codes/nodes/"+category.replace('/','').toLowerCase()+"/"+filename, "_blank");
-};
-
 const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error, onRefresh, onNodeInfo, onViewCode }) => {
   const [searchResult, setSearchResult] = useState<string>('');
   const [filteredNodes, setFilteredNodes] = useState<NodeTypeWithIcon[]>([]);
@@ -87,10 +83,16 @@ const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error, 
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const toast = useToast();
 
+  // サイドメニュー開閉管理
+  const [isSideExpand, setIsSideExpand] = useState<boolean>(true);
+
   // ダイアログ管理
   const { isOpen: isCopyModalOpen, onOpen: onCopyModalOpen, onClose: onCopyModalClose } = useDisclosure();
   const { isOpen: isDeleteAlertOpen, onOpen: onDeleteAlertOpen, onClose: onDeleteAlertClose } = useDisclosure();
   const cancelRef = useRef<HTMLButtonElement>(null);
+
+  // タブシステムのコンテキストを使用
+  const { addJupyterTab } = useTabContext();
 
   console.log("サイドボックスエリア", filteredNodes)
   
@@ -127,7 +129,7 @@ const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error, 
         .filter(node => 
           node.label.toLowerCase().includes(keyword.toLowerCase()) ||
           node.description.toLowerCase().includes(keyword.toLowerCase()) ||
-          node.category.toLowerCase().includes(keyword.toLowerCase()) ||
+          //node.category.toLowerCase().includes(keyword.toLowerCase()) ||
           node.file_name.toLowerCase().includes(keyword.toLowerCase())
         )
         .map(node => ({
@@ -395,504 +397,538 @@ const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error, 
     }, {} as Record<string, boolean>);
     setCollapsedCategories(newState);
   };
+
+  // Jupyterを別タブで開く
+  const OpenJupyter = (filename : string, category : string) => {
+    // JupyterLab URLを構築（開発モード）
+    const jupyterUrl = "http://localhost:8000/user/user1/lab/workspaces/auto-E/tree/codes/nodes/"+category.replace('/','').toLowerCase()+"/"+filename
+    
+    let projectId = localStorage.getItem('projectId');
+    projectId = projectId ? projectId : "";
+    // 新しいタブを作成
+    addJupyterTab(projectId, filename, jupyterUrl);
+  };
   
   return (
     <Box
-      position="fixed"
-      left={0}
-      top="64px"
-      height="calc(100vh - 64px)"
-      width="320px"
-      bg="gray.900"
-      color="white"
-      borderRight="1px solid"
-      borderColor="gray.700"
-      zIndex={10}
-      display="flex"
-      flexDirection="column"
+        position="absolute"
+        top="268px"
+        left="8px"
     >
-      <Box 
-        p={4}
-        overflowY="auto"
-        height="100%"
-        css={{
-          '&::-webkit-scrollbar': {
-            width: '8px',
-          },
-          '&::-webkit-scrollbar-track': {
-            width: '8px',
-            background: '#2D3748',
-            borderRadius: '4px',
-          },
-          '&::-webkit-scrollbar-thumb': {
-            background: '#4A5568',
-            borderRadius: '4px',
-          },
-          '&::-webkit-scrollbar-thumb:hover': {
-            background: '#718096',
-          },
-        }}
+      <IconButton
+        position="absolute"
+        top="72px"
+        left="16px"
+        zIndex={1000}
+        aria-label="メニュー開閉"
+        icon={<FiMenu />}
+        onClick={() => setIsSideExpand(!isSideExpand)}
+        colorScheme="gray"
+        bg="gray.200"
+        _hover={{ bg: 'gray.600' }}
+      />
+      <Box
+        position="absolute"
+        left={0}
+        top="64px"
+        height="calc(100vh - 348px)"
+        width="320px"
+        // 幅は isOpen によって変化。transition で滑らかに
+        //width={isSideExpand ? '320px' : '8px'}
+        display={isSideExpand ? 'block' : 'none'}
+        transition="width 200ms ease"
+        bg="gray.900"
+        color="white"
+        borderRight="1px solid"
+        borderColor="gray.700"
+        zIndex={10}
+        flex="1"
+        flexDirection="column"
       >
-        <VStack spacing={6} align="stretch">
-          <Box position="sticky" top={0} bg="gray.900" pb={2} zIndex={1}>
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
-              <Heading size="md">Node Library</Heading>
-              <HStack spacing={2}>
-                {nodes && (
-                  <Text fontSize="xs" color="gray.400">
-                    {nodes.total_nodes} nodes from {nodes.total_files} files
-                  </Text>
-                )}
-                <Tooltip 
-                  label="Node Refresh - Sync node data from server" 
-                  hasArrow
-                  placement="bottom"
-                  bg="gray.800"
-                  color="white"
-                  fontSize="sm"
-                >
-                  <IconButton
-                    aria-label="Sync node data"
-                    icon={<Icon as={FiRefreshCw} />}
-                    size="sm"
-                    colorScheme="blue"
-                    variant="ghost"
-                    isLoading={isSyncing}
-                    onClick={handleSyncNodes}
-                    _hover={{
-                      bg: "blue.600",
-                      color: "white"
-                    }}
-                    _active={{
-                      bg: "blue.700"
-                    }}
-                    disabled={isSyncing}
-                  />
-                </Tooltip>
-              </HStack>
-            </Box>
-            <KeywordSearch 
-              onSearch={handleSearch}
-              placeholder="Search nodes..."
-              size="md"
-              width="100%"
-            />
-            
-            {/* 同期中のインディケーター */}
-            {isSyncing && (
-              <Box 
-                mt={2} 
-                p={2} 
-                bg="blue.900" 
-                borderRadius="md" 
-                border="1px solid" 
-                borderColor="blue.700"
-              >
+        <Box 
+          p={4}
+          overflowY="auto"
+          height="100%"
+          css={{
+            '&::-webkit-scrollbar': {
+              width: '8px',
+            },
+            '&::-webkit-scrollbar-track': {
+              width: '8px',
+              background: '#2D3748',
+              borderRadius: '4px',
+            },
+            '&::-webkit-scrollbar-thumb': {
+              background: '#4A5568',
+              borderRadius: '4px',
+            },
+            '&::-webkit-scrollbar-thumb:hover': {
+              background: '#718096',
+            },
+          }}
+        >
+          <VStack spacing={6} align="stretch">
+            <Box position="sticky" top={0} bg="gray.900" pb={2} zIndex={1}>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={4} paddingBottom={2}>
                 <HStack spacing={2}>
-                  <Spinner size="sm" color="blue.300" />
-                  <Text fontSize="sm" color="blue.200">
-                    Syncing node data... This may take a moment.
-                  </Text>
+                  {nodes && (
+                    <Text fontSize="xs" color="gray.400" paddingLeft={16}>
+                      {nodes.total_nodes} nodes from {nodes.total_files} files
+                    </Text>
+                  )}
+                  <Tooltip 
+                    label="Node Refresh - Sync node data from server" 
+                    hasArrow
+                    placement="bottom"
+                    bg="gray.800"
+                    color="white"
+                    fontSize="sm"
+                  >
+                    <IconButton
+                      position="absolute"
+                      right="0px"
+                      aria-label="Sync node data"
+                      icon={<Icon as={FiRefreshCw} />}
+                      size="sm"
+                      colorScheme="blue"
+                      variant="ghost"
+                      isLoading={isSyncing}
+                      onClick={handleSyncNodes}
+                      _hover={{
+                        bg: "blue.600",
+                        color: "white"
+                      }}
+                      _active={{
+                        bg: "blue.700"
+                      }}
+                      disabled={isSyncing}
+                    />
+                  </Tooltip>
                 </HStack>
               </Box>
-            )}
-          </Box>
-          
-          <Divider borderColor="gray.700" />
+              <KeywordSearch 
+                onSearch={handleSearch}
+                placeholder="Search nodes..."
+                size="md"
+                width="100%"
+              />
+              
+              {/* 同期中のインディケーター */}
+              {isSyncing && (
+                <Box 
+                  mt={2} 
+                  p={2} 
+                  bg="blue.900" 
+                  borderRadius="md" 
+                  border="1px solid" 
+                  borderColor="blue.700"
+                >
+                  <HStack spacing={2}>
+                    <Spinner size="sm" color="blue.300" />
+                    <Text fontSize="sm" color="blue.200">
+                      Syncing node data... This may take a moment.
+                    </Text>
+                  </HStack>
+                </Box>
+              )}
+            </Box>
+            
+            <Divider borderColor="gray.700" />
 
-          <HStack
-            justify="space-between"
-            align="center"
-            mt={-4}
-            mb={-3}
-          >
-            <Text
-              fontSize="sm"
-              fontWeight="bold"
-              color="gray.400"
-              textTransform="uppercase"
-              letterSpacing="wider"
+            <HStack
+              justify="space-between"
+              align="center"
+              mt={-4}
+              mb={-3}
             >
-              Nodes
-            </Text>
-            {Object.keys(nodesByCategory).length > 1 && (
-              <HStack spacing={1}>
-                <Tooltip label="Expand all categories" hasArrow>
-                  <IconButton
-                    aria-label="Expand all"
-                    icon={<FiChevronDown />}
-                    size="xs"
-                    variant="ghost"
-                    color="gray.400"
-                    _hover={{ color: "blue.300" }}
-                    onClick={() => toggleAllCategories(false)}
-                  />
-                </Tooltip>
-                <Tooltip label="Collapse all categories" hasArrow>
-                  <IconButton
-                    aria-label="Collapse all"
-                    icon={<FiChevronRight />}
-                    size="xs"
-                    variant="ghost"
-                    color="gray.400"
-                    _hover={{ color: "blue.300" }}
-                    onClick={() => toggleAllCategories(true)}
-                  />
-                </Tooltip>
-              </HStack>
-            )}
-          </HStack>
-          
-          <Box>
-            {isLoading ? (
-              <Box 
-                textAlign="center" 
-                py={8}
+              <Text
+                fontSize="sm"
+                fontWeight="bold"
+                color="gray.400"
+                textTransform="uppercase"
+                letterSpacing="wider"
               >
-                <Spinner color="blue.400" size="lg" />
-                <Text mt={4} color="gray.400">Loading nodes...</Text>
-              </Box>
-            ) : error ? (
-              <Alert status="error" bg="red.900" borderColor="red.700">
-                <AlertIcon />
-                <Text fontSize="sm">{error}</Text>
-              </Alert>
-            ) : nodes === null || !nodes.nodes || nodes.nodes.length === 0 ? (
-              <Box 
-                textAlign="center" 
-                py={8} 
-                color="gray.500"
-              >
-                <Text>No nodes available</Text>
-                <Text fontSize="sm" mt={2}>Upload Python files to add custom nodes</Text>
-              </Box>
-            ) : (
-              <>
-                {Object.entries(nodesByCategory).length > 0 ? (
-                  Object.entries(nodesByCategory).map(([category, categoryNodes]) => {
-                    const isCollapsed = collapsedCategories[category];
-                    return (
-                      <Box key={category} mb={4}>
-                        {/* カテゴリヘッダー */}
-                        <Box
-                          display="flex"
-                          alignItems="center"
-                          justifyContent="space-between"
-                          p={2}
-                          bg="gray.750"
-                          borderRadius="md"
-                          cursor="pointer"
-                          _hover={{ bg: "gray.700" }}
-                          onClick={() => toggleCategory(category)}
-                          mb={2}
-                        >
-                          <HStack spacing={2}>
-                            <Icon
-                              as={isCollapsed ? FiChevronRight : FiChevronDown}
-                              color="gray.400"
-                              transition="transform 0.2s"
-                            />
-                            <Text
-                              fontSize="sm"
-                              fontWeight="bold"
-                              color="gray.300"
-                              textTransform="capitalize"
-                            >
-                              {category}
-                            </Text>
-                          </HStack>
-                          <Badge
-                            size="sm"
-                            colorScheme="blue"
-                            variant="subtle"
-                            borderRadius="full"
-                          >
-                            {categoryNodes.length}
-                          </Badge>
-                        </Box>
-
-                        {/* カテゴリ内のノード */}
-                        <Collapse in={!isCollapsed} animateOpacity>
-                          <SimpleGrid columns={1} spacing={2}>
-                            {categoryNodes.map((node) => (
-                          <Box
-                            key={node.id}
-                            bg="gray.800"
-                            borderRadius="md"
-                            border="1px solid"
-                            borderColor="gray.700"
-                            cursor="grab"
-                            _hover={{
-                              bg: "gray.700",
-                              borderColor: "blue.500",
-                              transform: "translateY(-2px)",
-                              transition: "all 0.2s"
-                            }}
-                            onDragStart={(event) => onDragStart(event, node)}
-                            draggable
-                            overflow="hidden"
-                          >
-                            {/* ヘッダー部分 */}
-                            <Box
-                              bg="gray.750"
-                              px={3}
-                              borderBottom="1px solid"
-                              borderColor="gray.600"
-                              onDragStart={(e) => e.stopPropagation()}
-                              onDrag={(e) => e.stopPropagation()}
-                              draggable={false}
-                            >
-                              {/* アクションボタンエリア */}
-                              <Box py={1} display="flex" justifyContent="flex-end">
-                                <HStack spacing={1}>
-                                  <IconButton
-                                    aria-label="View source code"
-                                    icon={<FiCode />}
-                                    size="xs"
-                                    variant="ghost"
-                                    color="gray.400"
-                                    _hover={{ 
-                                      color: "purple.300",
-                                      bg: "purple.700" 
-                                    }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                      //onViewCode?.(node);
-                                      OpenJupyter(node.file_name, node.category);
-                                    }}
-                                    onMouseDown={(e) => {
-                                      e.stopPropagation();
-                                    }}
-                                    onDragStart={(e) => {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                    }}
-                                    draggable={false}
-                                  />
-                                  <IconButton
-                                    aria-label="Node information"
-                                    icon={<FiInfo />}
-                                    size="xs"
-                                    variant="ghost"
-                                    color="gray.400"
-                                    _hover={{ 
-                                      color: "green.300",
-                                      bg: "green.700" 
-                                    }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                      onNodeInfo?.(node);
-                                    }}
-                                    onMouseDown={(e) => {
-                                      e.stopPropagation();
-                                    }}
-                                    onDragStart={(e) => {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                    }}
-                                    draggable={false}
-                                  />
-                                  <IconButton
-                                    aria-label="Copy node"
-                                    icon={<FiCopy />}
-                                    size="xs"
-                                    variant="ghost"
-                                    color="gray.400"
-                                    _hover={{ 
-                                      color: "blue.300",
-                                      bg: "blue.700" 
-                                    }}
-                                    isLoading={isCopying === node.file_id}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                      openCopyDialog(node);
-                                    }}
-                                    onMouseDown={(e) => {
-                                      e.stopPropagation();
-                                    }}
-                                    onDragStart={(e) => {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                    }}
-                                    draggable={false}
-                                  />
-                                  <IconButton
-                                    aria-label="Delete node"
-                                    icon={<FiTrash2 />}
-                                    size="xs"
-                                    variant="ghost"
-                                    color="gray.400"
-                                    _hover={{ 
-                                      color: "red.300",
-                                      bg: "red.700" 
-                                    }}
-                                    isLoading={isDeleting === node.file_id}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                      openDeleteDialog(node);
-                                    }}
-                                    onMouseDown={(e) => {
-                                      e.stopPropagation();
-                                    }}
-                                    onDragStart={(e) => {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                    }}
-                                    draggable={false}
-                                  />
-                                </HStack>
-                              </Box>
-
-                              {/* タイトルエリア */}
-                              <Box pb={2}>
-                                <HStack alignItems="center" spacing={2}>
-                                  <Icon 
-                                    as={node.icon} 
-                                    boxSize={4} 
-                                    color="blue.400"
-                                  />
-                                  <Text fontWeight="bold" fontSize="sm" color="white">
-                                    {node.label}
-                                  </Text>
-                                </HStack>
-                              </Box>
-                            </Box>
-
-                            {/* コンテンツ部分 */}
-                            <Box p={3}>
-                              <Text fontSize="xs" color="gray.500" mb={2}>
-                                from {node.file_name}
-                              </Text>
-                              <Text fontSize="xs" color="gray.400" mb={2}>
-                                {node.description}
-                              </Text>
-                              {node.schema && (Object.keys(node.schema.outputs).length  > 0 || Object.keys(node.schema.inputs).length  > 0) && (
-                                <Box>
-                                  <Text fontSize="xs" color="gray.500" mb={1}>
-                                    Ports: {Object.keys(node.schema.inputs).length}in / {Object.keys(node.schema.outputs).length}out
-                                  </Text>
-                                </Box>
-                              )}
-                              </Box>
-                            </Box>
-                            ))}
-                          </SimpleGrid>
-                        </Collapse>
-                      </Box>
-                    );
-                  })
-                ) : (
-                  <Box 
-                    textAlign="center" 
-                    py={8} 
-                    color="gray.500"
-                  >
-                    <Text>No nodes found matching "{searchResult}"</Text>
-                  </Box>
-                )}
-              </>
-            )}
-          </Box>
-        </VStack>
-      </Box>
-
-      {/* コピー用ファイル名入力モーダル */}
-      <Modal isOpen={isCopyModalOpen} onClose={onCopyModalClose}>
-        <ModalOverlay />
-        <ModalContent bg="gray.800" color="white">
-          <ModalHeader>Copy Node</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            <Text mb={4}>
-              Copy "{nodeToAction?.label}" as:
-            </Text>
-            <Input
-              value={copyFileName}
-              onChange={(e) => setCopyFileName(e.target.value)}
-              placeholder="Enter new file name"
-              bg="gray.700"
-              border="1px solid"
-              borderColor="gray.600"
-              _focus={{
-                borderColor: "blue.400",
-                boxShadow: "0 0 0 1px #63b3ed",
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleCopyNode();
-                }
-              }}
-            />
-            <Text fontSize="xs" color="gray.400" mt={2}>
-              * .py extension will be added automatically
-            </Text>
-          </ModalBody>
-          <ModalFooter>
-            <Button 
-              variant="ghost" 
-              mr={3} 
-              onClick={onCopyModalClose}
-              color="gray.300"
-            >
-              Cancel
-            </Button>
-            <Button 
-              colorScheme="blue" 
-              onClick={handleCopyNode}
-              isLoading={isCopying === nodeToAction?.file_id}
-              isDisabled={!copyFileName.trim()}
-            >
-              Copy
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-      {/* 削除確認アラートダイアログ */}
-      <AlertDialog
-        isOpen={isDeleteAlertOpen}
-        leastDestructiveRef={cancelRef}
-        onClose={onDeleteAlertClose}
-      >
-        <AlertDialogOverlay>
-          <AlertDialogContent bg="gray.800" color="white">
-            <AlertDialogHeader fontSize="lg" fontWeight="bold">
-              Delete Node
-            </AlertDialogHeader>
-
-            <AlertDialogBody>
-              Are you sure you want to delete "{nodeToAction?.label}"?
-              <br />
-              <Text fontSize="sm" color="gray.400" mt={2}>
-                This action cannot be undone.
+                Nodes
               </Text>
-            </AlertDialogBody>
+              {Object.keys(nodesByCategory).length > 1 && (
+                <HStack spacing={1}>
+                  <Tooltip label="Expand all categories" hasArrow>
+                    <IconButton
+                      aria-label="Expand all"
+                      icon={<FiChevronDown />}
+                      size="xs"
+                      variant="ghost"
+                      color="gray.400"
+                      _hover={{ color: "blue.300" }}
+                      onClick={() => toggleAllCategories(false)}
+                    />
+                  </Tooltip>
+                  <Tooltip label="Collapse all categories" hasArrow>
+                    <IconButton
+                      aria-label="Collapse all"
+                      icon={<FiChevronRight />}
+                      size="xs"
+                      variant="ghost"
+                      color="gray.400"
+                      _hover={{ color: "blue.300" }}
+                      onClick={() => toggleAllCategories(true)}
+                    />
+                  </Tooltip>
+                </HStack>
+              )}
+            </HStack>
+            
+            <Box>
+              {isLoading ? (
+                <Box 
+                  textAlign="center" 
+                  py={8}
+                >
+                  <Spinner color="blue.400" size="lg" />
+                  <Text mt={4} color="gray.400">Loading nodes...</Text>
+                </Box>
+              ) : error ? (
+                <Alert status="error" bg="red.900" borderColor="red.700">
+                  <AlertIcon />
+                  <Text fontSize="sm">{error}</Text>
+                </Alert>
+              ) : nodes === null || !nodes.nodes || nodes.nodes.length === 0 ? (
+                <Box 
+                  textAlign="center" 
+                  py={8} 
+                  color="gray.500"
+                >
+                  <Text>No nodes available</Text>
+                  <Text fontSize="sm" mt={2}>Upload Python files to add custom nodes</Text>
+                </Box>
+              ) : (
+                <>
+                  {Object.entries(nodesByCategory).length > 0 ? (
+                    Object.entries(nodesByCategory).map(([category, categoryNodes]) => {
+                      const isCollapsed = collapsedCategories[category];
+                      return (
+                        <Box key={category} mb={4}>
+                          {/* カテゴリヘッダー */}
+                          <Box
+                            display="flex"
+                            alignItems="center"
+                            justifyContent="space-between"
+                            p={2}
+                            bg="gray.750"
+                            borderRadius="md"
+                            cursor="pointer"
+                            _hover={{ bg: "gray.700" }}
+                            onClick={() => toggleCategory(category)}
+                            mb={2}
+                          >
+                            <HStack spacing={2}>
+                              <Icon
+                                as={isCollapsed ? FiChevronRight : FiChevronDown}
+                                color="gray.400"
+                                transition="transform 0.2s"
+                              />
+                              <Text
+                                fontSize="sm"
+                                fontWeight="bold"
+                                color="gray.300"
+                                textTransform="capitalize"
+                              >
+                                {category}
+                              </Text>
+                            </HStack>
+                            <Badge
+                              size="sm"
+                              colorScheme="blue"
+                              variant="subtle"
+                              borderRadius="full"
+                            >
+                              {categoryNodes.length}
+                            </Badge>
+                          </Box>
 
-            <AlertDialogFooter>
+                          {/* カテゴリ内のノード */}
+                          <Collapse in={!isCollapsed} animateOpacity>
+                            <SimpleGrid columns={1} spacing={2}>
+                              {categoryNodes.map((node) => (
+                            <Box
+                              key={node.id}
+                              bg="gray.800"
+                              borderRadius="md"
+                              border="1px solid"
+                              borderColor="gray.700"
+                              cursor="grab"
+                              _hover={{
+                                bg: "gray.700",
+                                borderColor: "blue.500",
+                                transform: "translateY(-2px)",
+                                transition: "all 0.2s"
+                              }}
+                              onDragStart={(event) => onDragStart(event, node)}
+                              draggable
+                              overflow="hidden"
+                            >
+                              {/* ヘッダー部分 */}
+                              <Box
+                                bg="gray.750"
+                                px={3}
+                                borderBottom="1px solid"
+                                borderColor="gray.600"
+                                onDragStart={(e) => e.stopPropagation()}
+                                onDrag={(e) => e.stopPropagation()}
+                                draggable={false}
+                              >
+                                {/* アクションボタンエリア */}
+                                <Box py={1} display="flex" justifyContent="flex-end">
+                                  <HStack spacing={1}>
+                                    <IconButton
+                                      aria-label="View source code"
+                                      icon={<FiCode />}
+                                      size="xs"
+                                      variant="ghost"
+                                      color="gray.400"
+                                      _hover={{ 
+                                        color: "purple.300",
+                                        bg: "purple.700" 
+                                      }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                        //onViewCode?.(node);
+                                        OpenJupyter(node.file_name, node.category);
+                                      }}
+                                      onMouseDown={(e) => {
+                                        e.stopPropagation();
+                                      }}
+                                      onDragStart={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                      }}
+                                      draggable={false}
+                                    />
+                                    <IconButton
+                                      aria-label="Node information"
+                                      icon={<FiInfo />}
+                                      size="xs"
+                                      variant="ghost"
+                                      color="gray.400"
+                                      _hover={{ 
+                                        color: "green.300",
+                                        bg: "green.700" 
+                                      }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                        onNodeInfo?.(node);
+                                      }}
+                                      onMouseDown={(e) => {
+                                        e.stopPropagation();
+                                      }}
+                                      onDragStart={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                      }}
+                                      draggable={false}
+                                    />
+                                    <IconButton
+                                      aria-label="Copy node"
+                                      icon={<FiCopy />}
+                                      size="xs"
+                                      variant="ghost"
+                                      color="gray.400"
+                                      _hover={{ 
+                                        color: "blue.300",
+                                        bg: "blue.700" 
+                                      }}
+                                      isLoading={isCopying === node.file_id}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                        openCopyDialog(node);
+                                      }}
+                                      onMouseDown={(e) => {
+                                        e.stopPropagation();
+                                      }}
+                                      onDragStart={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                      }}
+                                      draggable={false}
+                                    />
+                                    <IconButton
+                                      aria-label="Delete node"
+                                      icon={<FiTrash2 />}
+                                      size="xs"
+                                      variant="ghost"
+                                      color="gray.400"
+                                      _hover={{ 
+                                        color: "red.300",
+                                        bg: "red.700" 
+                                      }}
+                                      isLoading={isDeleting === node.file_id}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                        openDeleteDialog(node);
+                                      }}
+                                      onMouseDown={(e) => {
+                                        e.stopPropagation();
+                                      }}
+                                      onDragStart={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                      }}
+                                      draggable={false}
+                                    />
+                                  </HStack>
+                                </Box>
+
+                                {/* タイトルエリア */}
+                                <Box pb={2}>
+                                  <HStack alignItems="center" spacing={2}>
+                                    <Icon 
+                                      as={node.icon} 
+                                      boxSize={4} 
+                                      color="blue.400"
+                                    />
+                                    <Text fontWeight="bold" fontSize="sm" color="white">
+                                      {node.label}
+                                    </Text>
+                                  </HStack>
+                                </Box>
+                              </Box>
+
+                              {/* コンテンツ部分 */}
+                              <Box p={3}>
+                                <Text fontSize="xs" color="gray.500" mb={2}>
+                                  from {node.file_name}
+                                </Text>
+                                <Text fontSize="xs" color="gray.400" mb={2}>
+                                  {node.description}
+                                </Text>
+                                {node.schema && (Object.keys(node.schema.outputs).length  > 0 || Object.keys(node.schema.inputs).length  > 0) && (
+                                  <Box>
+                                    <Text fontSize="xs" color="gray.500" mb={1}>
+                                      Ports: {Object.keys(node.schema.inputs).length}in / {Object.keys(node.schema.outputs).length}out
+                                    </Text>
+                                  </Box>
+                                )}
+                                </Box>
+                              </Box>
+                              ))}
+                            </SimpleGrid>
+                          </Collapse>
+                        </Box>
+                      );
+                    })
+                  ) : (
+                    <Box 
+                      textAlign="center" 
+                      py={8} 
+                      color="gray.500"
+                    >
+                      <Text>No nodes found matching "{searchResult}"</Text>
+                    </Box>
+                  )}
+                </>
+              )}
+            </Box>
+          </VStack>
+        </Box>
+
+        {/* コピー用ファイル名入力モーダル */}
+        <Modal isOpen={isCopyModalOpen} onClose={onCopyModalClose}>
+          <ModalOverlay />
+          <ModalContent bg="gray.800" color="white">
+            <ModalHeader>Copy Node</ModalHeader>
+            <ModalCloseButton />
+            <ModalBody>
+              <Text mb={4}>
+                Copy "{nodeToAction?.label}" as:
+              </Text>
+              <Input
+                value={copyFileName}
+                onChange={(e) => setCopyFileName(e.target.value)}
+                placeholder="Enter new file name"
+                bg="gray.700"
+                border="1px solid"
+                borderColor="gray.600"
+                _focus={{
+                  borderColor: "blue.400",
+                  boxShadow: "0 0 0 1px #63b3ed",
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleCopyNode();
+                  }
+                }}
+              />
+              <Text fontSize="xs" color="gray.400" mt={2}>
+                * .py extension will be added automatically
+              </Text>
+            </ModalBody>
+            <ModalFooter>
               <Button 
-                ref={cancelRef} 
-                onClick={onDeleteAlertClose}
-                variant="ghost"
+                variant="ghost" 
+                mr={3} 
+                onClick={onCopyModalClose}
                 color="gray.300"
               >
                 Cancel
               </Button>
               <Button 
-                colorScheme="red" 
-                onClick={handleDeleteNode} 
-                ml={3}
-                isLoading={isDeleting === nodeToAction?.file_id}
+                colorScheme="blue" 
+                onClick={handleCopyNode}
+                isLoading={isCopying === nodeToAction?.file_id}
+                isDisabled={!copyFileName.trim()}
               >
-                Delete
+                Copy
               </Button>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialogOverlay>
-      </AlertDialog>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+
+        {/* 削除確認アラートダイアログ */}
+        <AlertDialog
+          isOpen={isDeleteAlertOpen}
+          leastDestructiveRef={cancelRef}
+          onClose={onDeleteAlertClose}
+        >
+          <AlertDialogOverlay>
+            <AlertDialogContent bg="gray.800" color="white">
+              <AlertDialogHeader fontSize="lg" fontWeight="bold">
+                Delete Node
+              </AlertDialogHeader>
+
+              <AlertDialogBody>
+                Are you sure you want to delete "{nodeToAction?.label}"?
+                <br />
+                <Text fontSize="sm" color="gray.400" mt={2}>
+                  This action cannot be undone.
+                </Text>
+              </AlertDialogBody>
+
+              <AlertDialogFooter>
+                <Button 
+                  ref={cancelRef} 
+                  onClick={onDeleteAlertClose}
+                  variant="ghost"
+                  color="gray.300"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  colorScheme="red" 
+                  onClick={handleDeleteNode} 
+                  ml={3}
+                  isLoading={isDeleting === nodeToAction?.file_id}
+                >
+                  Delete
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialogOverlay>
+        </AlertDialog>
+      </Box>
     </Box>
   );
 };

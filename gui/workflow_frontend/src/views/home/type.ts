@@ -6,11 +6,13 @@ export interface InputField {
   required?: boolean;
   default_value?: any;
   constraints?: any;
+  optional?: boolean;
 }
 
 export interface OutputField {
   type: string;
   description?: string;
+  optional?: boolean;
 }
 
 export interface ParameterField {
@@ -23,6 +25,7 @@ export interface ParameterField {
     options?: any[];
     [key: string]: any;
   };
+  optional?: boolean;
   widget_type?: string;
 }
 

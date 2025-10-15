@@ -1,19 +1,16 @@
-import { Handle, NodeProps, Position } from "@xyflow/react";
+import { useState, useCallback, useEffect } from 'react';
+import { Handle, NodeProps, Position, useUpdateNodeInternals } from "@xyflow/react";
 import { CalculationNodeData } from "../type";
 import { Badge, Box, Text, HStack, IconButton, Tooltip, Icon } from "@chakra-ui/react";
 import { ViewIcon, InfoIcon, DeleteIcon } from "@chakra-ui/icons";
 import { FiCode } from "react-icons/fi";
+import { useTabContext } from '../../../components/tabs/TabManager';
 
 interface NodeCallbacks {
   onJupyter?: (nodeId: string) => void;
   onInfo?: (nodeId: string) => void;
   onDelete?: (nodeId: string) => void;
 }
-
-// Jupyterを別タブで開く
-const OpenJupyter = (filename : string, category : string) => {
-    window.open("http://localhost:8000/user/user1/lab/workspaces/auto-E/tree/codes/nodes/"+category.replace('/','').toLowerCase()+"/"+filename, "_blank");
-};
 
 export const CalculationNode = ({ 
   id, 
@@ -26,7 +23,7 @@ export const CalculationNode = ({
 
   console.log("これがスキーマデータ", schema);
   console.log("Node data timestamp:", data.__timestamp || 'no timestamp');
-  
+
   // ハンドルIDを一意に生成する関数
   const generateHandleId = (nodeId: string, fieldName: string, handleType: 'input' | 'output', portType: string) => {
     return `${nodeId}-${fieldName}-${handleType}-${portType}`;
@@ -35,23 +32,48 @@ export const CalculationNode = ({
   // inputs、outputsを配列に変換
   const inputEntries = schema.inputs ? Object.entries(schema.inputs) : [];
   const outputEntries = schema.outputs ? Object.entries(schema.outputs) : [];
-  
+
+  // タブシステムのコンテキストを使用
+  const { addJupyterTab } = useTabContext();
+
   // すべてのフィールドを結合（inputsを先、outputsを後）
   const allFields = [
     ...inputEntries.map(([name, data]) => ({
       name,
       type: data.type || 'any',
       description: data.description,
-      port_direction: 'input'
+      port_direction: 'input',
+      optional: data.optional,
     })),
     ...outputEntries.map(([name, data]) => ({
       name,
       type: data.type || 'any',
       description: data.description,
-      port_direction: 'output'
+      port_direction: 'output',
+      optional: data.optional,
     }))
   ];
-  
+
+  // 入出力パラメータ伸縮管理
+  const [isParamExpand, setIsParamExpand] = useState<boolean>(true);
+  const updateNodeInternals = useUpdateNodeInternals();
+  //const isParamExpand = data.isParamExpand || false;
+
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [isParamExpand, id, updateNodeInternals]);
+
+  // Jupyterを別タブで開く
+  const OpenJupyter = (filename : string, category : string) => {
+    // JupyterLab URLを構築（開発モード）
+    const jupyterUrl = "http://localhost:8000/user/user1/lab/workspaces/auto-E/tree/codes/nodes/"+category.replace('/','').toLowerCase()+"/"+filename
+    
+    let projectId = localStorage.getItem('projectId');
+    projectId = projectId ? projectId : "";
+    // 新しいタブを作成
+    addJupyterTab(projectId, filename, jupyterUrl);
+  };
+
   return (
     <Box
       bg="white"
@@ -175,10 +197,11 @@ export const CalculationNode = ({
               display="flex"
               justifyContent="space-between"
               alignItems="center"
-              minHeight="32px"
+              minHeight="12px"
               bg={isOutput ? 'green.50' : isInput ? 'blue.50' : 'gray.50'}
               _hover={{ bg: isOutput ? 'green.100' : isInput ? 'blue.100' : 'gray.100' }}
               transition="background-color 0.2s"
+              height={isParamExpand ? '32px' : '12px'}
             >
               <Text 
                 fontSize="xs" 
@@ -188,7 +211,7 @@ export const CalculationNode = ({
                 isTruncated
                 title={field.description || field.name}
               >
-                {field.name}
+                {field.name}{ field.optional ? '*' : '' }
               </Text>
               
               <Badge 

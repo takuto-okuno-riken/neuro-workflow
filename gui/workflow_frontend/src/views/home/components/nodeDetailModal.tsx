@@ -356,6 +356,9 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
     // 全てのノードでschemaから最新の値を取得（DBの最新状態を反映）
     const param = localNodeData?.data.schema.parameters?.[parameterKey];
     if (param && param[field] !== undefined) {
+      //if (field == 'default_value') {
+      //  return Number.isInteger(param[field]) ? `${param[field].toFixed(1)}` : `${param[field]}`;
+      //}
       return param[field];
     }
 
@@ -412,6 +415,7 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
 
     return (
       <VStack spacing={3} align="stretch">
+        <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6} w="100%" templateColumns={{ lg: "1fr 1fr" }}>
         {Object.entries(schema.parameters).map(([key, param]) => (
           <Box 
             key={key} 
@@ -440,7 +444,7 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
                   <HStack align="start" spacing={2}>
                     <Text fontSize="xs" color="gray.400" minW="80px">default_value:</Text>
                     {editingParam === key && editingField === 'default_value' ? (
-                      <VStack flex="1" spacing={1} align="stretch">
+                      <VStack flex="1" spacing={1} /*align="stretch"*/>
                         {editValue.includes('\n') || editValue.startsWith('[') || editValue.startsWith('{') ? (
                           <Textarea
                             value={editValue}
@@ -482,7 +486,7 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
                       </VStack>
                     ) : (
                       <HStack flex="1" spacing={1}>
-                        <Code colorScheme="gray" fontSize="xs" bg="gray.600" color="white" flex="1">
+                        <Code colorScheme="gray" fontSize="xs" bg="gray.600" color="white" flex="1" maxW="360">
                           {(() => {
                             const currentValue = getNodeParameterValue(key, 'default_value');
                             return Array.isArray(currentValue) || typeof currentValue === 'object'
@@ -577,6 +581,7 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
             </VStack>
           </Box>
         ))}
+        </SimpleGrid>
       </VStack>
     );
   };
@@ -597,7 +602,7 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
         {Object.entries(ports).map(([portName, portData]) => (
           <HStack key={portName} spacing={3} align="center">
             <Text fontWeight="bold" fontSize="md" color={`${colorScheme}.200`}>
-              {portName}
+              {portName}{portData.optional ? '*' : ''}
             </Text>
             <Text color="gray.400">:</Text>
             <Text 
@@ -605,7 +610,8 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
               fontSize="md" 
               color={`${renderDataTypeColor(portData.type || 'any')}.300`}
             >
-              {portData.type || 'any'}
+              type={portData.type || 'any'}<br/>
+              description={portData.description || 'any'}<br/>
             </Text>
           </HStack>
         ))}
@@ -700,44 +706,45 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
 
           {/* 4つのセクションを2x2グリッドで配置 */}
           <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6} w="100%" templateColumns={{ lg: "1fr 1fr" }}>
-            {/* Inputs */}
             <Box>
-              <Text fontWeight="bold" fontSize="lg" mb={4} color="blue.300">
-                ・Inputs
-              </Text>
-              <Box
-                bg="gray.800"
-                p={6}
-                borderRadius="lg"
-                border="2px"
-                borderColor="blue.500"
-                h="150px"
-                overflowY="auto"
-                boxShadow="lg"
-              >
-                {renderPortsSection(schema.inputs || {}, 'Inputs', 'blue')}
+              {/* Inputs */}
+              <Box>
+                <Text fontWeight="bold" fontSize="lg" mb={4} color="blue.300">
+                  ・Inputs
+                </Text>
+                <Box
+                  bg="gray.800"
+                  p={6}
+                  borderRadius="lg"
+                  border="2px"
+                  borderColor="blue.500"
+                  h="220px"
+                  overflowY="auto"
+                  boxShadow="lg"
+                >
+                  {renderPortsSection(schema.inputs || {}, 'Inputs', 'blue')}
+                </Box>
+              </Box>
+
+              {/* Outputs */}
+              <Box marginTop={4}>
+                <Text fontWeight="bold" fontSize="lg" mb={4} color="green.300">
+                  ・Outputs
+                </Text>
+                <Box
+                  bg="gray.800"
+                  p={6}
+                  borderRadius="lg"
+                  border="2px"
+                  borderColor="green.500"
+                  h="220px"
+                  overflowY="auto"
+                  boxShadow="lg"
+                >
+                  {renderPortsSection(schema.outputs || {}, 'Outputs', 'green')}
+                </Box>
               </Box>
             </Box>
-
-            {/* Outputs */}
-            <Box>
-              <Text fontWeight="bold" fontSize="lg" mb={4} color="green.300">
-                ・Outputs
-              </Text>
-              <Box
-                bg="gray.800"
-                p={6}
-                borderRadius="lg"
-                border="2px"
-                borderColor="green.500"
-                h="150px"
-                overflowY="auto"
-                boxShadow="lg"
-              >
-                {renderPortsSection(schema.outputs || {}, 'Outputs', 'green')}
-              </Box>
-            </Box>
-
             {/* Methods */}
             <Box>
               <Text fontWeight="bold" fontSize="lg" mb={4} color="purple.300">
@@ -756,26 +763,25 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
                 {renderMethodsSection()}
               </Box>
             </Box>
-
-            {/* Parameters */}
-            <Box>
-              <Text fontWeight="bold" fontSize="lg" mb={4} color="orange.300">
-                ・Parameters
-              </Text>
-              <Box
-                bg="gray.800"
-                p={6}
-                borderRadius="lg"
-                border="2px"
-                borderColor="orange.500"
-                h="500px"
-                overflowY="auto"
-                boxShadow="lg"
-              >
-                {renderParametersSection()}
-              </Box>
-            </Box>
           </SimpleGrid>
+          {/* Parameters */}
+          <Box>
+            <Text fontWeight="bold" fontSize="lg" mb={4} color="orange.300">
+              ・Parameters
+            </Text>
+            <Box
+              bg="gray.800"
+              p={6}
+              borderRadius="lg"
+              border="2px"
+              borderColor="orange.500"
+              h="500px"
+              overflowY="auto"
+              boxShadow="lg"
+            >
+              {renderParametersSection()}
+            </Box>
+          </Box>
         </VStack>
       </Box>
 
