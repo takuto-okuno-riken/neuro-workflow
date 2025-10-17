@@ -36,7 +36,7 @@ export const useTabContext = () => {
   return context;
 };
 
-const TabManager: React.FC = () => {
+export const TabManager: React.FC = () => {
   const [tabs, setTabs] = useState<Tab[]>([
     {
       id: 'workflow',
@@ -114,7 +114,7 @@ const TabManager: React.FC = () => {
         height="100%" 
         display="flex" 
         flexDirection="column"
-        marginLeft="320px"
+        //marginLeft="320px"
       >
         {/* タブバー */}
         <TabBar />

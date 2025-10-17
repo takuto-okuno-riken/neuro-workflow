@@ -602,7 +602,7 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
         {Object.entries(ports).map(([portName, portData]) => (
           <HStack key={portName} spacing={3} align="center">
             <Text fontWeight="bold" fontSize="md" color={`${colorScheme}.200`}>
-              {portName}{portData.optional ? '*' : ''}
+              {portName}{portData.optional ? '' : '*'}
             </Text>
             <Text color="gray.400">:</Text>
             <Text 

@@ -211,7 +211,7 @@ export const CalculationNode = ({
                 isTruncated
                 title={field.description || field.name}
               >
-                {field.name}{ field.optional ? '*' : '' }
+                {field.name}{ field.optional ? '' : '*' }
               </Text>
               
               <Badge 
