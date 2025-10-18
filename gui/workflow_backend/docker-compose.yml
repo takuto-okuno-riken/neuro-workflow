@@ -46,13 +46,11 @@ services:
     restart: unless-stopped
     networks:
       - workflow
-      - jupyterhub-network
 
 volumes:
   postgres_data:
   jupyterhub-data:
 
 networks:
-  jupyterhub-network:
-    name: jupyterhub-network
   workflow:
+    name: neuro-workflow_workflow
