@@ -39,7 +39,7 @@ except ImportError:
     NEST_AVAILABLE = False
     print("Warning: NEST not available. Node will work in script generation mode only.")
 
-class SNNbuilder_Connection(Node):
+class SNNbuilder_Connection3(Node):
     """
     A NeuroWorkflow node for building neural connections with biological context.
     
