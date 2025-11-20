@@ -61,9 +61,10 @@ c.DockerSpawner.default_url = "/lab"
 
 # JupyterLab CSP settings for iframe embedding
 c.DockerSpawner.args = [
-    "--ServerApp.tornado_settings={'headers':{'Content-Security-Policy':\"frame-ancestors 'self' http://localhost:5173 http://127.0.0.1:5173 *\"}}",
+    # Allow ServerApp to be embedded and accept any origin (use carefully in production)
+    "--ServerApp.tornado_settings={'headers':{'Content-Security-Policy':\"frame-ancestors *\"}}",
     "--ServerApp.allow_origin='*'",
-    "--ServerApp.disable_check_xsrf=True"
+    "--ServerApp.disable_check_xsrf=True",
 ]
 
 # User management
@@ -87,11 +88,18 @@ c.DockerSpawner.start_timeout = 300
 c.DockerSpawner.http_timeout = 120
 
 # =============== IFRAME EMBEDDING SUPPORT ===============
-# Allow embedding in iframes by removing X-Frame-Options restrictions
+# Allow embedding in iframes and permit cross-origin requests
+# WARNING: This relaxes browser protections. Make sure this is intended and use HTTPS in production.
 c.JupyterHub.tornado_settings = {
     'headers': {
-        'X-Frame-Options': 'SAMEORIGIN',  # または 'ALLOWALL' for any domain
-        'Content-Security-Policy': "frame-ancestors 'self' http://localhost:5173 http://127.0.0.1:5173"
+        # Allow framing from any origin (use with extreme caution in production)
+        'X-Frame-Options': 'ALLOWALL',
+        # Allow any origin to embed (frame-ancestors *). Keep minimal in production.
+        'Content-Security-Policy': "frame-ancestors *",
+        # Basic CORS headers so browsers can perform cross-origin requests to the hub API
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, DELETE',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, X-CSRFToken'
     }
 }
 
