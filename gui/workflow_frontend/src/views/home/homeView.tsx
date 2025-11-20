@@ -124,11 +124,30 @@ const HomeView = () => {
 
       // JupyterLab URLを構築（開発モード）
       //const jupyterUrl = `http://localhost:8000/hub/login?username=user1&password=password`;
-      const jupyterUrl = "http://localhost:8000/user/user1/lab/workspaces/auto-E/tree/codes/projects/"+capitalizedProjectName+"/"+capitalizedProjectName+".py"
-      
-      // 新しいタブを作成
+
+      // If the host contains a port, replace it with :8000. Otherwise keep the host as-is.
+      // Example: example.com:3000 -> example.com:8000
+      const jupyterBase = ((): string => {
+        try {
+          if (typeof window === 'undefined') return 'http://localhost:8000';
+          const { protocol, hostname, host } = window.location;
+          // host includes port if present (hostname:port)
+          if (host.includes(':')) {
+            return `${protocol}//${hostname}:8000`;
+          }
+          return `${protocol}//${host}`;
+        } catch (e) {
+          return 'http://localhost:8000';
+        }
+      })();
+
+      // Construct the JupyterLab URL using the detected base
+      const jupyterUrl = `${jupyterBase}/user/user1/lab/workspaces/auto-E/tree/codes/projects/${capitalizedProjectName}/${capitalizedProjectName}.py`;
+      console.log('Constructed JupyterLab URL:', jupyterUrl);
+
+      // Create a new tab
       addJupyterTab(selectedProject, projectName, jupyterUrl);
-      
+
       toast({
         title: "JupyterLab Tab Created",
         description: `Created tab for project "${projectName}"`,
