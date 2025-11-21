@@ -65,8 +65,21 @@ export const CalculationNode = ({
 
   // Jupyterを別タブで開く
   const OpenJupyter = (filename : string, category : string) => {
+    const jupyterBase = ((): string => {
+      try {
+        if (typeof window === 'undefined') return 'http://localhost:8000';
+        const { protocol, hostname, host } = window.location;
+        // host includes port if present (hostname:port)
+        if (host.includes(':')) {
+      	return `${protocol}//${hostname}:8000`;
+        }
+        return `${protocol}//${host}`;
+      } catch (e) {
+        return 'http://localhost:8000';
+      }
+    })();
     // JupyterLab URLを構築（開発モード）
-    const jupyterUrl = "http://localhost:8000/user/user1/lab/workspaces/auto-E/tree/codes/nodes/"+category.replace('/','').toLowerCase()+"/"+filename
+    const jupyterUrl = jupyterBase+"/user/user1/lab/workspaces/auto-E/tree/codes/nodes/"+category.replace('/','').toLowerCase()+"/"+filename
     
     let projectId = localStorage.getItem('projectId');
     projectId = projectId ? projectId : "";
