@@ -143,7 +143,6 @@ const HomeView = () => {
 
       // Construct the JupyterLab URL using the detected base
       const jupyterUrl = `${jupyterBase}/user/user1/lab/workspaces/auto-E/tree/codes/projects/${capitalizedProjectName}/${capitalizedProjectName}.py`;
-      console.log('Constructed JupyterLab URL:', jupyterUrl);
 
       // Create a new tab
       addJupyterTab(selectedProject, projectName, jupyterUrl);
