@@ -13,7 +13,7 @@ services:
     networks:
       - workflow
 
-  # === Django サービス ===
+  # === Django Service ===
   web:
     build: .
     container_name: web
