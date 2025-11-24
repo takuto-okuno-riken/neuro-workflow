@@ -21,22 +21,22 @@ export const CalculationNode = ({
 }: NodeProps<CalculationNodeData> & NodeCallbacks) => {
   const schema = data.schema || { inputs: {}, outputs: {}, parameters: {} };
 
-  console.log("これがスキーマデータ", schema);
-  console.log("Node data timestamp:", data.__timestamp || 'no timestamp');
+  //console.log("This is the schema data", schema);
+  //console.log("Node data timestamp:", data.__timestamp || 'no timestamp');
 
-  // ハンドルIDを一意に生成する関数
+  // A function that generates a unique handle ID
   const generateHandleId = (nodeId: string, fieldName: string, handleType: 'input' | 'output', portType: string) => {
     return `${nodeId}-${fieldName}-${handleType}-${portType}`;
   };
   
-  // inputs、outputsを配列に変換
+  // Convert inputs and outputs to arrays
   const inputEntries = schema.inputs ? Object.entries(schema.inputs) : [];
   const outputEntries = schema.outputs ? Object.entries(schema.outputs) : [];
 
-  // タブシステムのコンテキストを使用
+  // Use the tab system context
   const { addJupyterTab } = useTabContext();
 
-  // すべてのフィールドを結合（inputsを先、outputsを後）
+  // Combine all fields (inputs first, outputs second)
   const allFields = [
     ...inputEntries.map(([name, data]) => ({
       name,
@@ -54,7 +54,7 @@ export const CalculationNode = ({
     }))
   ];
 
-  // 入出力パラメータ伸縮管理
+  // Input/output parameter expansion/contraction management
   const [isParamExpand, setIsParamExpand] = useState<boolean>(true);
   const updateNodeInternals = useUpdateNodeInternals();
   //const isParamExpand = data.isParamExpand || false;
@@ -63,27 +63,14 @@ export const CalculationNode = ({
     updateNodeInternals(id);
   }, [isParamExpand, id, updateNodeInternals]);
 
-  // Jupyterを別タブで開く
+  // Open Jupyter in a new tab
   const OpenJupyter = (filename : string, category : string) => {
-    const jupyterBase = ((): string => {
-      try {
-        if (typeof window === 'undefined') return 'http://localhost:8000';
-        const { protocol, hostname, host } = window.location;
-        // host includes port if present (hostname:port)
-        if (host.includes(':')) {
-      	return `${protocol}//${hostname}:8000`;
-        }
-        return `${protocol}//${host}`;
-      } catch (e) {
-        return 'http://localhost:8000';
-      }
-    })();
-    // JupyterLab URLを構築（開発モード）
-    const jupyterUrl = jupyterBase+"/user/user1/lab/workspaces/auto-E/tree/codes/nodes/"+category.replace('/','').toLowerCase()+"/"+filename
+    // Build JupyterLab URL (development mode)
+    const jupyterUrl = "http://localhost:8000/user/user1/lab/workspaces/auto-E/tree/codes/nodes/"+category.replace('/','').toLowerCase()+"/"+filename
     
     let projectId = localStorage.getItem('projectId');
     projectId = projectId ? projectId : "";
-    // 新しいタブを作成
+    // Create new tab
     addJupyterTab(projectId, filename, jupyterUrl);
   };
 
@@ -101,9 +88,10 @@ export const CalculationNode = ({
       transition="all 0.2s"
       role="group"
     >
-      {/* ヘッダー */}
+      {/* header */}
       <Box 
-        bg={selected ? "purple.600" : "purple.500"}
+        //bg={selected ? "purple.300" : "purple.300"}
+        bg={data.color}
         color="white" 
         p={2} 
         borderTopRadius="lg"
@@ -111,15 +99,15 @@ export const CalculationNode = ({
         fontSize="sm"
         transition="all 0.2s"
       >
-        {/* ノード名（中央） */}
+        {/* Node name (center) */}
         <HStack justify="space-between" align="center">
           <Text fontSize="sm" fontWeight="bold" flex="1" textAlign="center">
-            {data.label}
+            {data.instanceName || data.label }
           </Text>
         </HStack>
       </Box>
       
-      {/* ボタン専用フィールド */}
+      {/* Button field */}
       <Box 
         bg={selected ? "purple.100" : "gray.50"}
         borderBottom="1px solid #e2e8f0"
@@ -194,7 +182,7 @@ export const CalculationNode = ({
       </Box>
       
 
-      {/* フィールド表示 */}
+      {/* field display */}
       <Box p={0}>
         {allFields.map((field, index) => {
           const isInput = field.port_direction === 'input';
@@ -244,7 +232,7 @@ export const CalculationNode = ({
                 {field.type?.includes('[]') ? `${field.type}` : field.type}
               </Badge>
               
-              {/* 入力ハンドル */}
+              {/* input handle */}
               {isInput && (
                 <Handle
                   type="target"
@@ -265,7 +253,7 @@ export const CalculationNode = ({
                 />
               )}
               
-              {/* 出力ハンドル */}
+              {/* output handle */}
               {isOutput && (
                 <Handle
                   type="source"
@@ -290,7 +278,7 @@ export const CalculationNode = ({
         })}
       </Box>
       
-      {/* デバッグ情報（開発時のみ表示） */}
+      {/* Debug information (displayed only during development) */}
       {process.env.NODE_ENV === 'development' && (
         <Box
           position="absolute"

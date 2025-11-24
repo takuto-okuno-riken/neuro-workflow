@@ -25,7 +25,7 @@ import {
 import { AttachmentIcon, CloseIcon, CheckIcon } from '@chakra-ui/icons';
 import { useNavigate } from 'react-router-dom';
 
-// カテゴリ定義
+// Category definition
 const CATEGORIES = {
   analysis: { label: 'Analysis', color: 'blue', description: 'Data analysis and statistics' },
   io: { label: 'I/O', color: 'green', description: 'Input/output operations' },
@@ -37,7 +37,7 @@ const CATEGORIES = {
 
 type CategoryKey = keyof typeof CATEGORIES;
 
-// APIレスポンスの型定義
+// API response type definition
 interface UploadResponse {
   id: string;
   name: string;
@@ -95,7 +95,7 @@ const BoxUpload: React.FC = () => {
         return;
       }
 
-      // 10MB制限チェック
+      // 10MB limit check
       if (file.size > 10 * 1024 * 1024) {
         rejectedFiles.push({
           name: file.name,
@@ -206,7 +206,7 @@ const BoxUpload: React.FC = () => {
     const response = await fetch('/api/box/upload/', {
       method: 'POST',
       body: formData,
-      // Note: Content-Typeヘッダーは自動設定されるため指定しない
+      // Note: Do not specify the Content-Type header as it is set automatically.
     });
 
     if (!response.ok) {
@@ -218,7 +218,7 @@ const BoxUpload: React.FC = () => {
   };
 
   const handleRegistration = async () => {
-    // 入力検証
+    // Input validation
     if (selectedFiles.length === 0) {
       toast({
         title: 'Input Error',
@@ -254,7 +254,7 @@ const BoxUpload: React.FC = () => {
           const result = await uploadFile(file, fileNameToUse, description, category);
           newUploadedFiles.push(result);
           
-          // プログレス更新
+          // Progress update
           setUploadProgress(((i + 1) / selectedFiles.length) * 100);
           
           toast({
@@ -280,7 +280,7 @@ const BoxUpload: React.FC = () => {
       if (newUploadedFiles.length > 0) {
         setUploadedFiles(prev => [...prev, ...newUploadedFiles]);
         
-        // フォームをリセット
+        // reset form
         setSelectedFiles([]);
         setFileName('');
         setDescription('');

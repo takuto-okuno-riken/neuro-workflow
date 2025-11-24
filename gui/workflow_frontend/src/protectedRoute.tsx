@@ -11,7 +11,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { user, loading } = useAuth();
   const location = useLocation();
 
-  // ローディング中
+  // Loading ...
   if (loading) {
     return (
       <Box
@@ -25,12 +25,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     );
   }
 
-  // 未認証の場合はログインページにリダイレクト
+  // If unauthenticated, redirect to login page
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // 認証済みの場合は子コンポーネントを表示
+  // If authenticated, display child component
   return <>{children}</>;
 };
 
