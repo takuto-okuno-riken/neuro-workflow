@@ -70,7 +70,6 @@ type Viewport = {
 type FlowStore = {
   sharedNodes: Node<CalculationNodeData>[];
   sharedEdges: Edge[];
-
   setSharedNodes: (nodes: Node<CalculationNodeData>[]) => void;
   setSharedEdges: (edges: Edge[]) => void;
 };
@@ -79,8 +78,20 @@ type FlowStore = {
 const useFlowStore = create<FlowStore>((set) => ({
   sharedNodes: [],
   sharedEdges: [],
-  setSharedNodes: (sharedNodes) => set({ sharedNodes }),
-  setSharedEdges: (sharedEdges) => set({ sharedEdges }),
+  //setSharedNodes: (sharedNodes) => set({ sharedNodes }),
+  //setSharedEdges: (sharedEdges) => set({ sharedEdges }),
+  setSharedNodes: (valueOrFn) =>
+    set((state) => ({
+      sharedNodes: typeof valueOrFn === 'function'
+        ? (valueOrFn as (prev: Node<CalculationNodeData>[]) => Node<CalculationNodeData>[])(state.sharedNodes)
+        : valueOrFn
+    })),
+  setSharedEdges: (valueOrFn) =>
+    set((state) => ({
+      sharedEdges: typeof valueOrFn === 'function'
+        ? (valueOrFn as (prev: Edge[]) => Edge[])(state.sharedEdges)
+        : valueOrFn
+    })),
 }));
 
 const FLOW_STATE_KEY = 'reactflow-viewport';
@@ -283,7 +294,8 @@ const HomeView = () => {
           },
         });
       }
-      
+ 
+      const n = sharedNodes;
       setSharedNodes((nds) => nds.filter((node) => node.id !== nodeId));
       setSharedEdges((eds) => {
         const relatedEdges = eds.filter(

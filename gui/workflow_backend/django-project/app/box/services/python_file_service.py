@@ -35,24 +35,50 @@ class PythonFileService:
 
         # duplicate check
         existing_file = PythonFile.objects.filter(file_hash=file_hash).first()
-        if existing_file:
-            raise ValueError(f"File already exists: {existing_file.name}")
+        # overwrite
+        #if existing_file:
+        #    raise ValueError(f"File already exists: {existing_file.name}")
 
         # Decide file name
         if not name:
             name = file.name
 
-        # Create PythonFile instance
-        python_file = PythonFile.objects.create(
-            name=name,
-            description=description or "",
-            category=category,
-            file=file,
-            file_content=file_content,
-            uploaded_by=user,
-            file_size=file.size,
-            file_hash=file_hash,
-        )
+        if existing_file is not None:
+            # Update PythonFile instance
+            """
+            python_file = PythonFile.objects.filter(id=existing_file.id).update(
+                name=name,
+                description=description or "",
+                category=category,
+                file=file,
+                file_content=file_content,
+                uploaded_by=user,
+                file_size=file.size,
+                file_hash=file_hash,
+            )
+            """
+            python_file = PythonFile.objects.get(id=existing_file.id)
+            python_file.name = name
+            python_file.description = description or ""
+            python_file.category = category
+            python_file.file = file
+            python_file.file_content = file_content
+            python_file.uploaded_by = user
+            python_file.file_size = file.size
+            python_file.file_hash = file_hash
+            python_file.is_active = True
+        else:
+            # Create PythonFile instance
+            python_file = PythonFile.objects.create(
+                name=name,
+                description=description or "",
+                category=category,
+                file=file,
+                file_content=file_content,
+                uploaded_by=user,
+                file_size=file.size,
+                file_hash=file_hash,
+            )
 
         # Automatic analysis execution
         self._analyze_file(python_file)

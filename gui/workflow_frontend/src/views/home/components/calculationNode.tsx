@@ -1,10 +1,27 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Handle, NodeProps, Position, useUpdateNodeInternals } from "@xyflow/react";
 import { CalculationNodeData } from "../type";
-import { Badge, Box, Text, HStack, IconButton, Tooltip, Icon } from "@chakra-ui/react";
+import { 
+  Badge, 
+  Box, 
+  Text, 
+  HStack, 
+  useToast,
+  IconButton, 
+  Button,
+  useDisclosure,
+  AlertDialog,
+  AlertDialogOverlay,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogBody,
+  AlertDialogFooter,
+  Tooltip, Icon } from "@chakra-ui/react";
+import { useRef } from 'react';
 import { ViewIcon, InfoIcon, DeleteIcon } from "@chakra-ui/icons";
 import { FiCode } from "react-icons/fi";
 import { useTabContext } from '../../../components/tabs/TabManager';
+import { createAuthHeaders } from '../../../api/authHeaders';
 
 interface NodeCallbacks {
   onJupyter?: (nodeId: string) => void;
@@ -20,6 +37,12 @@ export const CalculationNode = ({
   ...callbacks 
 }: NodeProps<CalculationNodeData> & NodeCallbacks) => {
   const schema = data.schema || { inputs: {}, outputs: {}, parameters: {} };
+
+  const [nodeToAction, setNodeToAction] = useState<NodeTypeWithIcon | null>(null);
+  const { isOpen: isDeleteAlertOpen, onOpen: onDeleteAlertOpen, onClose: onDeleteAlertClose } = useDisclosure();
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const toast = useToast();
 
   //console.log("This is the schema data", schema);
   //console.log("Node data timestamp:", data.__timestamp || 'no timestamp');
@@ -72,6 +95,44 @@ export const CalculationNode = ({
     projectId = projectId ? projectId : "";
     // Create new tab
     addJupyterTab(projectId, filename, jupyterUrl);
+  };
+
+  // Opens a delete confirmation dialog
+  const openDeleteDialog = (node: NodeTypeWithIcon) => {
+    if (!node.label) {
+      toast({
+        title: "Error",
+        description: "No label available for deletion",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setNodeToAction(node);
+    onDeleteAlertOpen();
+  };
+
+// Delete execution on workflow
+  const handleDeleteNode = async () => {
+    if (!id) return;
+
+    try {
+      setIsDeleting(id);
+      callbacks.onDelete?.(id);
+    } catch (error) {
+      console.error('Error deleting node:', error);
+      toast({
+        title: "Error",
+        description: `Failed to delete node: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setIsDeleting(null);
+    }
   };
 
   return (
@@ -169,7 +230,9 @@ export const CalculationNode = ({
               icon={<DeleteIcon boxSize={2.5} />}
               onClick={(e) => {
                 e.stopPropagation();
-                callbacks.onDelete?.(id);
+                //callbacks.onDelete?.(id);
+                e.preventDefault();
+                openDeleteDialog(data);
               }}
               _hover={{ bg: "red.500", transform: "scale(1.1)" }}
               minW="18px"
@@ -294,6 +357,48 @@ export const CalculationNode = ({
           ID: {id}
         </Box>
       )}
+
+      {/* Delete confirmation alert dialog */}
+      <AlertDialog
+          isOpen={isDeleteAlertOpen}
+          leastDestructiveRef={cancelRef}
+          onClose={onDeleteAlertClose}
+        >
+          <AlertDialogOverlay>
+            <AlertDialogContent bg="gray.800" color="white">
+              <AlertDialogHeader fontSize="lg" fontWeight="bold">
+                Delete Node
+              </AlertDialogHeader>
+
+              <AlertDialogBody>
+                Are you sure you want to delete "{nodeToAction?.label}"?
+                <br />
+                <Text fontSize="sm" color="gray.400" mt={2}>
+                  This action cannot be undone.
+                </Text>
+              </AlertDialogBody>
+
+              <AlertDialogFooter>
+                <Button 
+                  ref={cancelRef} 
+                  onClick={onDeleteAlertClose}
+                  variant="ghost"
+                  color="gray.300"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  colorScheme="red" 
+                  onClick={handleDeleteNode} 
+                  ml={3}
+                  isLoading={isDeleting === nodeToAction?.file_id}
+                >
+                  Delete
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialogOverlay>
+        </AlertDialog>
     </Box>
   );
 };

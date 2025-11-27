@@ -218,7 +218,7 @@ const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error, 
     onDeleteAlertOpen();
   };
 
-  // Delete execution
+  // Delete execution on node list
   const handleDeleteNode = async () => {
     if (!nodeToAction) return;
 

@@ -24,8 +24,21 @@ import {
 } from '@chakra-ui/react';
 import { AttachmentIcon, CloseIcon, CheckIcon } from '@chakra-ui/icons';
 import { useNavigate } from 'react-router-dom';
+import { useCallback } from "react";
 
 // Category definition
+let categories = {
+  analysis: { label: 'Analysis', color: 'blue', description: 'Data analysis and statistics' },
+  io: { label: 'I/O', color: 'green', description: 'Input/output operations' },
+  network: { label: 'Network', color: 'purple', description: 'Network and communication' },
+  optimization: { label: 'Optimization', color: 'orange', description: 'Optimization algorithms' },
+  simulation: { label: 'Simulation', color: 'red', description: 'Simulation and modeling' },
+  stimulus: { label: 'Stimulus', color: 'teal', description: 'Stimulus generation and control' }
+};
+
+type CategoryKey = keyof typeof categories;
+
+/*
 const CATEGORIES = {
   analysis: { label: 'Analysis', color: 'blue', description: 'Data analysis and statistics' },
   io: { label: 'I/O', color: 'green', description: 'Input/output operations' },
@@ -36,6 +49,7 @@ const CATEGORIES = {
 } as const;
 
 type CategoryKey = keyof typeof CATEGORIES;
+*/
 
 // API response type definition
 interface UploadResponse {
@@ -78,6 +92,67 @@ const BoxUpload: React.FC = () => {
       setFileName(nameWithoutExtension);
     }
   }, [selectedFiles, fileName]);
+
+  // Categories interface
+  interface UseCategoriesReturn {
+    data: UploadedNodesResponse | null;
+    isLoading: boolean;
+    error: string | null;
+    refetch: () => Promise<void>;
+  }
+
+  // Get Categories
+  const getCategories = (): UseUploadedNodesReturn => {
+    const [data, setData] = useState<UploadedNodesResponse | null>(null);
+    const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [error, setError] = useState<string | null>(null);
+  
+    const fetchUploadedNodes = useCallback(async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+  
+        const response = await fetch("/api/box/categories/");
+  
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+  
+        //const result: UploadedNodesResponse = await response.json();
+        let catJson = await response.json();
+        for (const key in catJson.categories) {
+          if (!(catJson.categories[key].value in categories)){
+            categories[catJson.categories[key].value] = {
+              label: catJson.categories[key].label,
+              color: catJson.categories[key].settings['color'],
+              description: "",
+            };
+          }
+        }
+  
+        console.log("This is response data", categories);
+  
+        setData(categories);
+      } catch (err) {
+        console.error("Failed to fetch uploaded nodes:", err);
+        setError(err instanceof Error ? err.message : "Failed to fetch nodes");
+        setData(null);
+      } finally {
+        setIsLoading(false);
+      }
+    }, []);
+  
+    useEffect(() => {
+      fetchUploadedNodes();
+    }, [fetchUploadedNodes]);
+  
+    return {
+      data,
+      isLoading,
+      error,
+      refetch: fetchUploadedNodes,
+    };
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -311,6 +386,8 @@ const BoxUpload: React.FC = () => {
     navigate(-1);
   };
 
+  const catlist = getCategories();
+
   return (
     <Box height="100%" width="100%" overflow="auto" bg="gray.900">
       <VStack spacing={6} width="100%" p={6} maxWidth="600px" mx="auto" minHeight="100vh">
@@ -450,11 +527,11 @@ const BoxUpload: React.FC = () => {
                         </Text>
                         {file.category && (
                           <Badge
-                            colorScheme={CATEGORIES[file.category].color}
+                            colorScheme={categories[file.category].color}
                             variant="subtle"
                             size="sm"
                           >
-                            {CATEGORIES[file.category].label}
+                            {categories[file.category].label}
                           </Badge>
                         )}
                       </HStack>
@@ -518,7 +595,7 @@ const BoxUpload: React.FC = () => {
             bg="white"
             color="gray.800"
           >
-            {Object.entries(CATEGORIES).map(([key, value]) => (
+            {Object.entries(categories).map(([key, value]) => (
               <option key={key} value={key} style={{ color: '#2D3748' }}>
                 {value.label} - {value.description}
               </option>
@@ -527,11 +604,11 @@ const BoxUpload: React.FC = () => {
           <HStack mt={2} spacing={2}>
             <Text fontSize="xs" color="gray.400">Selected:</Text>
             <Badge
-              colorScheme={CATEGORIES[category].color}
+              colorScheme={categories[category].color}
               variant="subtle"
               fontSize="xs"
             >
-              {CATEGORIES[category].label}
+              {categories[category].label}
             </Badge>
           </HStack>
         </FormControl>
