@@ -65,6 +65,8 @@ const NodeDetailsContent: React.FC<NodeDetailsContentProps> = ({ nodeData, onNod
 
       let response;
       let requestBody;
+      
+      localNodeData.data.instanceName = instanceName;
 
       // Node in a workflow - Use the workflow parameter update endpoint
       const endpoint = `/api/workflow/${workflowId}/nodes/${localNodeData.id}/instance_name/`;

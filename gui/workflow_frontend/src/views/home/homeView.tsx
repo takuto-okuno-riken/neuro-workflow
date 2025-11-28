@@ -2090,7 +2090,7 @@ const HomeView = () => {
         <Modal isOpen={isViewOpen} onClose={onViewClose} size="2xl">
           <ModalOverlay />
           <ModalContent maxW="1200px" w="90vw">
-            <ModalHeader>Node Details: {selectedNode?.data.label}</ModalHeader>
+            <ModalHeader>Node Details: {/* selectedNode?.data.label */}</ModalHeader>
             <ModalCloseButton />
             <ModalBody marginTop={5}>
               <NodeDetailsContent
