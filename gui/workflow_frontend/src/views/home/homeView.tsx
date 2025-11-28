@@ -1467,6 +1467,12 @@ const HomeView = () => {
             nodeType = matchedNode.category || matchedNode.nodeType || matchedNode.type || 'calculationNode';
             label = matchedNode.label || matchedNode.name || label;
             fileName = matchedNode.file_name || "" ; 
+            // add ".py"
+            const chkPy = fileName.includes(".py");
+            if (!chkPy) {
+              fileName += ".py";
+            } 
+
             //color = matchedNode;   //'#FFFF00'; //categories[matchedNode.category].color || '#6b46c1' ;
           } else {
             console.log('❌ No matching node found, using fallback schema');

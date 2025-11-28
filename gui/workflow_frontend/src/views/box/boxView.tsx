@@ -496,6 +496,10 @@ const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error, 
   // Open Jupyter in a new tab
   const OpenJupyter = (filename : string, category : string) => {
     // Build JupyterLab URL (development mode)
+    const chkPy = filename.includes(".py");
+    if (!chkPy) {
+      filename += ".py";
+    } 
     const jupyterUrl = "http://localhost:8000/user/user1/lab/workspaces/auto-E/tree/codes/nodes/"+category.replace('/','').toLowerCase()+"/"+filename
     
     let projectId = localStorage.getItem('projectId');
