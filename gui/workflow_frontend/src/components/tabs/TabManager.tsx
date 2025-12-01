@@ -48,7 +48,7 @@ export const TabManager: React.FC = () => {
   const [activeTabId, setActiveTabId] = useState('workflow');
 
   const addJupyterTab = useCallback((projectId: string, projectName: string, url: string) => {
-    const existingTab = tabs.find(tab => tab.type === 'jupyter' && tab.projectId === projectId);
+    const existingTab = tabs.find(tab => tab.type === 'jupyter' && tab.id === `${projectId}-${projectName}`);
     
     if (existingTab) {
       // Activate an existing tab
@@ -56,11 +56,12 @@ export const TabManager: React.FC = () => {
       return;
     }
 
-    const newTabId = `jupyter-${projectId}`;
+    const newTabId = `${projectId}-${projectName}`;
     const newTab: Tab = {
       id: newTabId,
       type: 'jupyter',
-      title: `${projectName} - JupyterLab`,
+      //title: `${projectName} - JupyterLab`,
+      title: `${projectName}`,
       projectId,
       url,
       isActive: true,

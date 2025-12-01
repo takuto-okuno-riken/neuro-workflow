@@ -75,6 +75,14 @@ const Header: React.FC = () => {
           Neuro-workflow
       </Heading>
       
+      <Box 
+          marginLeft={5}
+          fontSize="sm"
+      >
+        <Text>Brain/MINDS 2.0</Text>
+        <Text>Okinawa Institute of Science and Technology / RIKEN CBS</Text>
+      </Box>
+
       <Spacer />
       
       <Flex alignItems="center">
@@ -108,7 +116,7 @@ const Header: React.FC = () => {
             mx={2}
             rightIcon={<ChevronDownIcon />}
           >
-            Box
+            Nodes
           </MenuButton>
           <MenuList bg="gray.800" borderColor="gray.700">
             <MenuItem as={RouterLink} to="/box/upload" bg="gray.800" _hover={{ bg: "gray.700" }}>Upload</MenuItem>        

@@ -1717,7 +1717,8 @@ const HomeView = () => {
         const newEdge = { 
           id: edgeId,
           ...params, 
-          style: { stroke: '#8b5cf6', strokeWidth: 2 }
+          /* style: { stroke: '#8b5cf6', strokeWidth: 2 } */
+          style: { stroke: '#aaaaaa', strokeWidth: 2 }
         };
         
         console.log('Creating new edge:', {
@@ -1821,7 +1822,8 @@ const HomeView = () => {
         attributionPosition="bottom-right"
         connectionLineStyle={{ stroke: '#8b5cf6', strokeWidth: 2 }}
         defaultEdgeOptions={{
-          style: { stroke: '#8b5cf6', strokeWidth: 2 },
+          /* style: { stroke: '#8b5cf6', strokeWidth: 2 },*/
+          style: { stroke: '#aaaaaa', strokeWidth: 2 },
           type: 'default',
         }}
         //defaultViewport={{ x: 0, y: 0, zoom: 5 }}
