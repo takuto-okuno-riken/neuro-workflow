@@ -57,6 +57,9 @@ RUN pip install --no-cache-dir \
     aiohttp \
     requests
 
+ # Install The Virtual Brain (TVB) libraries
+ RUN pip install --no-cache-dir tvb-library tvb-framework
+
 # Create a jovyan user (JupyterLab standard)
 RUN useradd -m -s /bin/bash -N -u 1000 jovyan && \
     chown jovyan:users /home/jovyan
