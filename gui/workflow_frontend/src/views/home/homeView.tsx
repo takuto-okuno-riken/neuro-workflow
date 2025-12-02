@@ -163,12 +163,29 @@ const HomeView = () => {
       // Get project name
       const projectName = projects.find(p => p.id === selectedProject)?.name || selectedProject;
       // Initial capitalization
-      const trimedProjectName = projectName.replace(/\s/g, '');
+      const trimedProjectName = projectName.replace(/\s/g, '').toLowerCase();
       const capitalizedProjectName = trimedProjectName.charAt(0).toUpperCase() + trimedProjectName.slice(1);
 
       // Build JupyterLab URL (development mode)
-      //const jupyterUrl = `http://localhost:8000/hub/login?username=user1&password=password`;
-      const jupyterUrl = "http://localhost:8000/user/user1/lab/workspaces/auto-E/tree/codes/projects/"+capitalizedProjectName+"/"+capitalizedProjectName+".py"
+
+      // If the host contains a port, replace it with :8000. Otherwise keep the host as-is.
+      // Example: example.com:3000 -> example.com:8000
+      const jupyterBase = ((): string => {
+        try {
+          if (typeof window === 'undefined') return 'http://localhost:8000';
+          const { protocol, hostname, host } = window.location;
+          // host includes port if present (hostname:port)
+          if (host.includes(':')) {
+            return `${protocol}//${hostname}:8000`;
+          }
+          return `${protocol}//${host}`;
+        } catch (e) {
+          return 'http://localhost:8000';
+        }
+      })();
+
+      // Construct the JupyterLab URL using the detected base
+      const jupyterUrl = `${jupyterBase}/user/user1/lab/workspaces/auto-E/tree/codes/projects/${capitalizedProjectName}/${capitalizedProjectName}.py`;
       
       // Create new tab
       addJupyterTab(selectedProject, projectName, jupyterUrl);

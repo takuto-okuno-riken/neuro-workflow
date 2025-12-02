@@ -112,11 +112,24 @@ export const ProjectSelector = ({
       // Get project name
       const projectName = projects.find(p => p.id === selectedProject)?.name || selectedProject;
       // Initial capitalization
-      const trimedProjectName = projectName.replace(/\s/g, '');
+      const trimedProjectName = projectName.replace(/\s/g, '').toLowerCase();
       const capitalizedProjectName = trimedProjectName.charAt(0).toUpperCase() + trimedProjectName.slice(1);
 
       // Build JupyterLab URL (development mode)
-      const jupyterUrl = "http://localhost:8000/user/user1/lab/workspaces/auto-E/tree/codes/projects/"+capitalizedProjectName+"/"+capitalizedProjectName+".py"
+      const jupyterBase = ((): string => {
+        try {
+          if (typeof window === 'undefined') return 'http://localhost:8000';
+          const { protocol, hostname, host } = window.location;
+          // host includes port if present (hostname:port)
+          if (host.includes(':')) {
+            return `${protocol}//${hostname}:8000`;
+          }
+          return `${protocol}//${host}`;
+        } catch (e) {
+          return 'http://localhost:8000';
+        }
+      })();
+      const jupyterUrl = `${jupyterBase}/user/user1/lab/workspaces/auto-E/tree/codes/projects/${capitalizedProjectName}/${capitalizedProjectName}.py`;
       
       // Create new tab
       addJupyterTab(selectedProject, projectName, jupyterUrl);

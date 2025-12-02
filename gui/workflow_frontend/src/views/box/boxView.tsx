@@ -500,7 +500,20 @@ const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error, 
     if (!chkPy) {
       filename += ".py";
     } 
-    const jupyterUrl = "http://localhost:8000/user/user1/lab/workspaces/auto-E/tree/codes/nodes/"+category.replace('/','').toLowerCase()+"/"+filename
+    const jupyterBase = ((): string => {
+      try {
+        if (typeof window === 'undefined') return 'http://localhost:8000';
+        const { protocol, hostname, host } = window.location;
+        // host includes port if present (hostname:port)
+        if (host.includes(':')) {
+          return `${protocol}//${hostname}:8000`;
+        }
+        return `${protocol}//${host}`;
+      } catch (e) {
+        return 'http://localhost:8000';
+      }
+    })();
+    const jupyterUrl = jupyterBase+"/user/user1/lab/workspaces/auto-E/tree/codes/nodes/"+category.replace('/','').toLowerCase()+"/"+filename
     
     let projectId = localStorage.getItem('projectId');
     projectId = projectId ? projectId : "";
