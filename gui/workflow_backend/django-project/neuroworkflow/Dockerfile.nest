@@ -13,6 +13,7 @@ RUN apt-get update && \
     python3 \
     python3-pip \
     python3-dev \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Miniconda
@@ -57,8 +58,13 @@ RUN pip install --no-cache-dir \
     aiohttp \
     requests
 
- # Install The Virtual Brain (TVB) libraries
- RUN pip install --no-cache-dir tvb-library tvb-framework
+# Install The Virtual Brain (TVB) libraries
+RUN pip install --no-cache-dir tvb-library tvb-framework
+
+# AWS Cli 
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+RUN unzip awscliv2.zip
+RUN ./aws/install
 
 # Create a jovyan user (JupyterLab standard)
 RUN useradd -m -s /bin/bash -N -u 1000 jovyan && \
