@@ -1,18 +1,9 @@
-FROM nest/nest-simulator:3.7
-
-# Override the default ENTRYPOINT to allow CMD to work
-ENTRYPOINT []
+FROM nest/nest-simulator:3.9
 
 # basic dependency packages
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     curl \
-    gnupg \
-    build-essential \
-    git \
-    python3 \
-    python3-pip \
-    python3-dev \
     unzip \
     && rm -rf /var/lib/apt/lists/*
 
@@ -29,53 +20,15 @@ ENV PATH="$CONDA_DIR/bin:${PATH}"
 ENV CONDA_PLUGINS_AUTO_ACCEPT_TOS=yes
 RUN conda install -y -c conda-forge -c MRtrix3 mrtrix3 libstdcxx-ng
 
-# Update pip
-RUN python3 -m pip install --upgrade pip setuptools wheel
-
-# Install JupyterHub + JupyterLab + Notebook
-RUN pip install --no-cache-dir \
-    jupyterhub \
-    jupyterlab \
-    notebook
-
-# Commonly used scientific calculation libraries in NEST
-RUN pip install --no-cache-dir \
-    numpy>=1.20.0 \
-    scipy \
-    matplotlib>=3.4.0 \
-    pandas \
-    seaborn>=0.11.0
-
-# Development and testing tools (added from the reference implementation)
-RUN pip install --no-cache-dir \
-    pytest>=6.0 \
-    black \
-    isort \
-    mypy \
-    setuptools>=42 \
-    wheel \
-    PyJWT \
-    aiohttp \
-    requests
-
+# Install AWS Cli 
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
+	&& unzip awscliv2.zip \
+	&& ./aws/install \
+	&& rm -rf awscliv2.zip aws
+ 
 # Install The Virtual Brain (TVB) libraries
-RUN pip install --no-cache-dir tvb-library tvb-framework
-
-# AWS Cli 
-RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-RUN unzip awscliv2.zip
-RUN ./aws/install
-
-# Create a jovyan user (JupyterLab standard)
-RUN useradd -m -s /bin/bash -N -u 1000 jovyan && \
-    chown jovyan:users /home/jovyan
-
-# Set NEST Python path as environment variable
-ENV PYTHONPATH="/opt/nest/lib/python3.10/site-packages:${PYTHONPATH}"
-
-# Working directory settings
-WORKDIR /home/jovyan
-USER jovyan
+RUN . /root/.env/bin/activate && \
+	pip install --no-cache-dir tvb-library tvb-framework jupyterhub
 
 # The entry point that JupyterHub calls as a user server
-CMD ["jupyterhub-singleuser"]
+CMD ["jupyterhub-singleuser", "--allow-root"]
