@@ -1,13 +1,24 @@
-FROM nest/nest-simulator:3.9
+FROM ubuntu:24.04
 
-# basic dependency packages
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    curl \
-    unzip \
-    && rm -rf /var/lib/apt/lists/*
+ARG SRC_PATH=/tmp
+ARG NEST_VERSION=3.9
 
-# Install Miniconda
+ENV TZ=Asia/Tokyo DEBIAN_FRONTEND=noninteractive OMPI_ALLOW_RUN_AS_ROOT=1 OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1 PATH=/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+RUN apt-get update && apt-get install -y --no-install-recommends \ 
+	ca-certificates locales tzdata \
+	python3 python3-venv python3-pip python3-dev \
+	git cmake ccache make gcc g++ \
+	libgsl-dev libboost-dev libltdl-dev libreadline-dev \
+	libopenmpi-dev pkg-config \
+	swig \
+	pandoc \
+    curl unzip \
+	&& rm -rf /var/lib/apt/lists/*
+
+WORKDIR /tmp
+
+# Install MRtrix3
 ENV CONDA_DIR=/opt/conda
 ENV CONDA_AUTO_UPDATE_CONDA=false
 RUN curl -sSL https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o /tmp/miniconda.sh && \
@@ -25,10 +36,87 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
 	&& unzip awscliv2.zip \
 	&& ./aws/install \
 	&& rm -rf awscliv2.zip aws
- 
-# Install The Virtual Brain (TVB) libraries
+
+# Install HDF5 libraries
+RUN curl -OL https://github.com/MathisRosenhauer/libaec/releases/download/v1.1.4/libaec-1.1.4.tar.gz && \
+	tar xf libaec-1.1.4.tar.gz && \
+	cd libaec-1.1.4 && \
+	mkdir build && \
+	cd build && \
+	cmake .. -DCMAKE_BUILD_TYPE=Release && \
+	make -j"$(nproc)" && \
+	make install && \
+	cd ../.. && \
+	rm -rf libaec-1.1.4 libaec-1.1.4.tar.gz
+
+RUN curl -OL https://github.com/HDFGroup/hdf5/releases/download/hdf5_1.14.6/hdf5-1.14.6.tar.gz && \
+	tar xf hdf5-1.14.6.tar.gz && \
+	cd hdf5-1.14.6 && \
+	mkdir build && \
+	cd build && \
+	cmake .. -DCMAKE_BUILD_TYPE=Release \
+			-DHDF5_BUILD_CPP_LIB=ON \
+			-DHDF5_ENABLE_CXX=ON && \
+	make -j"$(nproc)" && \
+	make install && \
+	cd ../.. && \
+	rm -rf hdf5-1.14.6 hdf5-1.14.6.tar.gz
+
+ARG HDF5_DIR=/usr/local/HDF_Group/HDF5/1.14.6
+RUN echo "${HDF5_DIR}/lib" > /etc/ld.so.conf.d/custom_hdf5.conf && \
+	ldconfig
+
+# Install NEST Simulator from source code
+RUN git clone --branch v${NEST_VERSION} --depth 1 https://github.com/nest/nest-simulator.git
+
+RUN python3 -m venv /root/.env && \
+	. /root/.env/bin/activate && \
+	echo "source /root/.env/bin/activate" >> /root/.bashrc && \
+	cd nest-simulator && \
+	pip install --upgrade pip wheel && \
+	pip install --no-cache-dir Cython numpy boost setuptools gsl meson-python ninja && \
+	pip install -v --no-cache-dir --no-build-isolation --force-reinstall --check-build-dependencies --no-binary pygsl pygsl && \
+	pip install --no-cache-dir -r requirements.txt
+
 RUN . /root/.env/bin/activate && \
-	pip install --no-cache-dir tvb-library tvb-framework jupyterhub
+	mkdir ${SRC_PATH}/nest-build && \
+	cd ${SRC_PATH}/nest-build && \
+	cmake -Dwith-optimize="-O2" \
+	-Dwith-warning=ON \
+	-Dwith-userdoc=OFF \
+	-Dwith-boost=ON \
+	-Dwith-ltdl=ON \
+	-Dwith-gsl=ON \
+	-Dwith-readline=ON \
+	-Dwith-python=ON \
+	-DPYTHON_EXECUTABLE=/root/.env/bin/python3 \
+	-Dwith-mpi=OFF \
+	-Dwith-openmp=ON \
+	-Dwith-libneurosim=OFF \
+	-Dwith-sionlib=OFF \
+	-Dwith-music=OFF \
+	-Dwith-hdf5=ON \
+    -DHDF5_ROOT=${HDF5_DIR} \
+	${SRC_PATH}/nest-simulator && \
+	make -j"$(nproc)" && \
+	make install && \
+	cd / && \
+	rm -rf ${SRC_PATH}/nest-build ${SRC_PATH}/nest-simulator
+
+RUN . /root/.env/bin/activate && \
+	pip install --no-cache-dir --upgrade nestml nest-desktop pandas jupyterlab notebook \
+		jupyterhub tvb-library tvb-framework && \
+	find /root/.cache -type f -delete
+
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+EXPOSE 52425/tcp
+EXPOSE 52426/tcp
+EXPOSE 54286/tcp
+EXPOSE 8080/tcp
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"] 
 
 # The entry point that JupyterHub calls as a user server
 CMD ["jupyterhub-singleuser", "--allow-root"]
