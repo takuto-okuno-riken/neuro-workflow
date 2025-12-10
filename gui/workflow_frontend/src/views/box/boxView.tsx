@@ -47,6 +47,7 @@ interface SidebarProps {
   onRefresh?: () => Promise<void>;
   onNodeInfo?: (node: BackendNodeType) => void;
   onViewCode?: (node: BackendNodeType) => void;
+  onChangeColor?: (category: string, color: string) => void;
 }
 
 // Defined according to the backend response type
@@ -74,7 +75,7 @@ interface NodeTypeWithIcon extends Omit<BackendNodeType, 'icon'> {
   icon: IconType;
 }
 
-const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error, onRefresh, onNodeInfo, onViewCode }) => {
+const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error, onRefresh, onNodeInfo, onViewCode, onChangeColor }) => {
   const [searchResult, setSearchResult] = useState<string>('');
   const [filteredNodes, setFilteredNodes] = useState<NodeTypeWithIcon[]>([]);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
@@ -135,6 +136,9 @@ const SideBoxArea: React.FC<SidebarProps> = ({ nodes, isLoading = false, error, 
       setCategoryColorValue(colorValue);
       // keep
       updateCategoryColorAPI(selectedCategory, colorValue);
+
+      // Category color
+      onChangeColor(selectedCategory, colorValue);
     }
   };
 

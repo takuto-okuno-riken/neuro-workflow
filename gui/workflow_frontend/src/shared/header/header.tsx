@@ -72,7 +72,7 @@ const Header: React.FC = () => {
           fontWeight="bold"
           cursor="pointer" 
         >
-          Neuro-workflow
+          Neuro-Workflow
       </Heading>
       
       <Box 

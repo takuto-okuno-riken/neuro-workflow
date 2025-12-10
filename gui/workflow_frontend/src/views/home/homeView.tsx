@@ -298,6 +298,13 @@ const HomeView = () => {
     onCodeOpen();
   }, [onCodeOpen]);
 
+  // Change category color from the sidebar
+  const handleChangeCategoryColor = useCallback((catname: string, color: string) => {
+    console.log('Change category color for sidebar color change');
+    //let a = uploadedNodes?.categories[catname]['color'] = color;
+    handleRefreshNodeData();
+  }, [uploadedNodes]);
+
   // handleNodeDelete
   const handleNodeDelete = useCallback(async (nodeId: string) => {
     try {
@@ -312,7 +319,7 @@ const HomeView = () => {
         });
       }
  
-      const n = sharedNodes;
+      //const n = sharedNodes;
       setSharedNodes((nds) => nds.filter((node) => node.id !== nodeId));
       setSharedEdges((eds) => {
         const relatedEdges = eds.filter(
@@ -331,6 +338,9 @@ const HomeView = () => {
             });
           });
         }
+
+        const projectId = localStorage.getItem(PROJECT_ID_KEY);
+        handleProjectChange( projectId );
         
         return eds.filter(
           (edge) => edge.source !== nodeId && edge.target !== nodeId
@@ -818,6 +828,17 @@ const HomeView = () => {
       if (response.ok) {
         const flowData: FlowData = await response.json();
 
+        // set changed color 
+        for (let i = 0; i < flowData.nodes.length; i++) {          
+          const cat_name = flowData.nodes[i].data.nodeType.toLowerCase();
+          if (uploadedNodes?.categories != null) {
+            const node_color = uploadedNodes?.categories[cat_name].color;
+            if (flowData.nodes[i].data.color != node_color) {
+              flowData.nodes[i].data.color = node_color;
+            }
+          }
+        }
+
         setSharedNodes(flowData.nodes as Node<CalculationNodeData>[] || []);
         setSharedEdges(flowData.edges || []);
         setSelectedProject(projectId);
@@ -934,7 +955,7 @@ const HomeView = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [sharedNodes, sharedEdges, setSharedNodes, setSharedEdges, toast, autoSaveEnabled, isViewOpen, isCodeOpen]);
+  }, [sharedNodes, sharedEdges, setSharedNodes, setSharedEdges, toast, autoSaveEnabled, isViewOpen, isCodeOpen, uploadedNodes]);
 
   // handleRefreshNodeData
   const handleRefreshNodeData = useCallback(async (filename: string) => {
@@ -1881,6 +1902,7 @@ const HomeView = () => {
         onRefresh={refetchNodes}
         onNodeInfo={handleSidebarNodeInfo}
         onViewCode={handleSidebarViewCode}
+        onChangeColor={handleChangeCategoryColor}
       />
       <ChatbotArea 
         position="absolute"

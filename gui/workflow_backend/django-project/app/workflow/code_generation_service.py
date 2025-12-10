@@ -333,7 +333,8 @@ if __name__ == "__main__":
 
             # Import all nodes from nodes (dynamically generated)
             # nodes/{ClassName}.py import {ClassName} from
-            return f"from nodes.{category}.{class_name} import {class_name}"
+            catregory_folder = category.replace("/", "")
+            return f"from nodes.{catregory_folder}.{class_name} import {class_name}"
 
         except Exception as e:
             logger.error(f"Error generating import statement for {class_name}: {e}")
