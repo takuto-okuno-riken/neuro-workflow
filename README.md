@@ -22,23 +22,11 @@ Get a first impression of NeuroWorkflow in action:
 
 <div align="center">
 
-[![NeuroWorkflow Preview](https://img.youtube.com/vi/hC4NUOuR3OI/maxresdefault.jpg)](https://www.youtube.com/watch?v=hC4NUOuR3OI)
+<iframe width="560" height="315" src="https://www.youtube.com/embed/hC4NUOuR3OI?si=Xf9_SjaZiQhpVxY7" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
-*Click the image above to watch the NeuroWorkflow demonstration*
+*NeuroWorkflow demonstration showing the node-based workflow system for neural simulations*
 
 </div>
-
-<!-- Alternative: Direct video for local viewing -->
-<details>
-<summary>📹 View video locally (click to expand)</summary>
-
-<video width="600" controls>
-  <source src="img/preview_neuro_workflow_oist.mp4" type="video/mp4">
-  Your browser does not support the video tag. 
-  <a href="img/preview_neuro_workflow_oist.mp4">Download the preview video</a>
-</video>
-
-</details>
 
 ## Features
 
@@ -48,17 +36,55 @@ Get a first impression of NeuroWorkflow in action:
 - Extensible architecture for custom nodes
 - Parameter optimization support for tuning simulation parameters
 
-## Current status
+## Current Status
 
-- The `src` folder contains the core functionality and sample nodes
-- In the examples folder:
-  - `sonata_simulation.py` - Basic simulation example
-  - `neuron_optimization.py` - Example of parameter optimization (not yet completed, but running with some bugs)
-  - `epilepsy_rs.py` - Example of epileptic resting state using the virtual brain TVB
-- In the notebooks folder:
-  - `01_Basic_Simulation.ipynb` - Interactive example of basic simulation
-  - `epilepsy_rs.ipynb` - Interactive example of epileptic resting state using the virtual brain TVB
-  - `SNNbuilder_example1.ipynb` - Interactive example of Spiking Neural Network building using SNNbuilder custom nodes
+### NeuroWorkflow Python API
+
+NeuroWorkflow provides a comprehensive Python API for building and executing computational neuroscience workflows using a node-based system. The core functionality is organized as follows:
+
+#### Node System
+- **Node Storage**: All available nodes are stored in `src/neuroworkflow/nodes/`
+- **Organization**: Nodes are organized in customizable categories for easy navigation
+- **Extensibility**: New custom nodes can be created and integrated into the system
+
+#### Creating Custom Nodes
+For developers interested in extending NeuroWorkflow with custom functionality:
+
+- **📋 Node Schema**: See `NODE_SCHEMA.md` for detailed node structure specifications
+- **📝 Template**: Use `CustomNodeTemplate.py` as a starting point for new nodes
+- **📖 Tutorial**: Follow `CUSTOM_NODE_TUTORIAL.md` for step-by-step node creation guide
+
+#### Python API Examples
+The following examples demonstrate how to use the NeuroWorkflow Python API to create and execute workflows:
+
+**Examples folder:**
+- `sonata_simulation.py` - Basic simulation example
+- `neuron_optimization.py` - Parameter optimization example (in development)
+- `epilepsy_rs.py` - Epileptic resting state simulation using The Virtual Brain (TVB)
+
+**Notebooks folder:**
+- `01_Basic_Simulation.ipynb` - Interactive basic simulation tutorial
+- `epilepsy_rs.ipynb` - Interactive epileptic resting state example with TVB
+- `SNNbuilder_example1.ipynb` - Spiking Neural Network building with SNNbuilder custom nodes
+
+### NeuroWorkflow Web Application
+
+For users who prefer a graphical interface, NeuroWorkflow includes a comprehensive web application that provides visual workflow building capabilities.
+
+#### Installation
+To set up the web application, follow the detailed instructions in `gui/README.md`.
+
+#### Important Setup Notes
+
+**Node Synchronization:**
+- The web app requires nodes to be copied from `src/neuroworkflow/nodes/` to `gui/workflow_backend/django-project/codes/nodes/`
+- This copy is regularly performed by administrators
+- **For developers**: If you create new custom nodes, ensure they are copied to the web app directory to make them available in the GUI
+
+**Core API Synchronization:**
+- The Python API base code from `src/neuroworkflow/core/` is also copied to the web application
+- Web app location: `gui/workflow_backend/django-project/codes/neuroworkflow/core/`
+- This ensures the web app stays synchronized with the latest API updates
 
 ## Conference Presentations
 
