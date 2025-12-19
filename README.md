@@ -7,9 +7,11 @@ A Python library for building and executing neural simulation workflows.
 <div align="center">
 
 ### Supported by Brain/MINDS 2.0
+
 <img src="img/BM2.0.png" alt="Brain/MINDS 2.0 Logo" width="200"/>
 
 ### Developed by Neural Computation Unit (Doya Lab) at OIST and Collaborators
+
 <img src="img/oist.png" alt="OIST Logo" width="200"/>
 
 </div>
@@ -28,10 +30,9 @@ Get a first impression of NeuroWorkflow in action:
 
 <br><br>
 
-<a href="https://youtu.be/hC4NUOuR3OI?si=VwYyRLDbtXGk6RiF" target="_blank">🎥 Watch the full NeuroWorkflow demonstration video</a>
+<a href="https://youtu.be/hC4NUOuR3OI?si=VwYyRLDbtXGk6RiF" target="_blank">🎥 Watch a short NeuroWorkflow demonstration video</a>
 
 </div>
-
 
 ## Current Status
 
@@ -40,11 +41,13 @@ Get a first impression of NeuroWorkflow in action:
 NeuroWorkflow provides a comprehensive Python API for building and executing computational neuroscience workflows using a node-based system. The core functionality is organized as follows:
 
 #### Node System
+
 - **Node Storage**: All available nodes are stored in `src/neuroworkflow/nodes/`
 - **Organization**: Nodes are organized in customizable categories for easy navigation
 - **Extensibility**: New custom nodes can be created and integrated into the system
 
 #### Creating Custom Nodes
+
 For developers interested in extending NeuroWorkflow with custom functionality:
 
 - **📋 Node Schema**: See `NODE_SCHEMA.md` for detailed node structure specifications
@@ -52,14 +55,17 @@ For developers interested in extending NeuroWorkflow with custom functionality:
 - **📖 Tutorial**: Follow `CUSTOM_NODE_TUTORIAL.md` for step-by-step node creation guide
 
 #### Python API Examples
+
 The following examples demonstrate how to use the NeuroWorkflow Python API to create and execute workflows:
 
 **Examples folder:**
+
 - `sonata_simulation.py` - Basic simulation example
 - `neuron_optimization.py` - Parameter optimization example (in development)
 - `epilepsy_rs.py` - Epileptic resting state simulation using The Virtual Brain (TVB)
 
 **Notebooks folder:**
+
 - `01_Basic_Simulation.ipynb` - Interactive basic simulation tutorial
 - `epilepsy_rs.ipynb` - Interactive epileptic resting state example with TVB
 - `SNNbuilder_example1.ipynb` - Spiking Neural Network building with SNNbuilder custom nodes
@@ -69,16 +75,19 @@ The following examples demonstrate how to use the NeuroWorkflow Python API to cr
 For users who prefer a graphical interface, NeuroWorkflow includes a comprehensive web application that provides visual workflow building capabilities.
 
 #### Installation
+
 To set up the web application, follow the detailed instructions in `gui/README.md`.
 
 #### Important Setup Notes
 
 **Node Synchronization:**
+
 - The web app requires nodes to be copied from `src/neuroworkflow/nodes/` to `gui/workflow_backend/django-project/codes/nodes/`
 - This copy is regularly performed by administrators
 - **For developers**: If you create new custom nodes, ensure they are copied to the web app directory to make them available in the GUI
 
 **Core API Synchronization:**
+
 - The Python API base code from `src/neuroworkflow/core/` is also copied to the web application
 - Web app location: `gui/workflow_backend/django-project/codes/neuroworkflow/core/`
 - This ensures the web app stays synchronized with the latest API updates
