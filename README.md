@@ -22,19 +22,12 @@ Get a first impression of NeuroWorkflow in action:
 
 <div align="center">
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/hC4NUOuR3OI?si=Xf9_SjaZiQhpVxY7" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+[![NeuroWorkflow Preview](https://img.youtube.com/vi/hC4NUOuR3OI/maxresdefault.jpg)](https://www.youtube.com/watch?v=hC4NUOuR3OI)
 
-*NeuroWorkflow demonstration showing the node-based workflow system for neural simulations*
+*Click the image above to watch the NeuroWorkflow demonstration*
 
 </div>
 
-## Features
-
-- Node-based workflow system for neural simulations
-- Type-safe connections between workflow components
-- Pre-built nodes for common neural simulation tasks
-- Extensible architecture for custom nodes
-- Parameter optimization support for tuning simulation parameters
 
 ## Current Status
 
