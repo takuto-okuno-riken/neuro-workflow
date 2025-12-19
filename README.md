@@ -2,6 +2,37 @@
 
 A Python library for building and executing neural simulation workflows.
 
+## Support and Development
+
+<div align="center">
+
+### Supported by [Brain/MINDS 2.0](https://brainminds.jp/)
+<img src="img/BM2.0.png" alt="Brain/MINDS 2.0 Logo" width="200"/>
+
+### Developed by [Neural Computation Unit (Doya Lab)](https://www.oist.jp/research/research-units/ncu) at OIST and Collaborators
+<img src="img/oist.png" alt="OIST Logo" width="200"/>
+
+</div>
+
+This project is supported by the **[Brain/MINDS 2.0](https://brainminds.jp/)** initiative and is being developed by the **[Neural Computation Unit (Doya Lab)](https://www.oist.jp/research/research-units/ncu)** at the **Okinawa Institute of Science and Technology (OIST)** in collaboration with partners.
+
+## Preview
+
+Get a first impression of NeuroWorkflow in action:
+
+<div align="center">
+
+<!-- For GitHub, the video will be displayed when uploaded to releases or assets -->
+<video width="600" controls>
+  <source src="img/preview_neuro_workflow_oist.mp4" type="video/mp4">
+  Your browser does not support the video tag. 
+  <a href="img/preview_neuro_workflow_oist.mp4">Download the preview video</a>
+</video>
+
+*NeuroWorkflow demonstration showing the node-based workflow system for neural simulations*
+
+</div>
+
 ## Features
 
 - Node-based workflow system for neural simulations

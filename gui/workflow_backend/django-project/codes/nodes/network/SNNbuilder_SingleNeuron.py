@@ -28,6 +28,7 @@ from neuroworkflow.core.port import PortType
 try:
     import nest
     NEST_AVAILABLE = True
+    nest.ResetKernel() # reset the kernel # this may be added to a new "start NEST model" node in the future, along with the scale of the model. 
 except ImportError:
     NEST_AVAILABLE = False
     print("Warning: NEST not available. Node will work in script generation mode only.")
