@@ -22,9 +22,13 @@ Get a first impression of NeuroWorkflow in action:
 
 <div align="center">
 
-[![NeuroWorkflow Preview](https://img.youtube.com/vi/hC4NUOuR3OI/maxresdefault.jpg)](https://www.youtube.com/watch?v=hC4NUOuR3OI)
+<img src="img/screen1.png" alt="NeuroWorkflow Screenshot 1" width="250" style="margin: 5px;"/>
+<img src="img/screen2.png" alt="NeuroWorkflow Screenshot 2" width="250" style="margin: 5px;"/>
+<img src="img/screen3.png" alt="NeuroWorkflow Screenshot 3" width="250" style="margin: 5px;"/>
 
-*Click the image above to watch the NeuroWorkflow demonstration*
+<br><br>
+
+<a href="https://youtu.be/hC4NUOuR3OI?si=VwYyRLDbtXGk6RiF" target="_blank">🎥 Watch the full NeuroWorkflow demonstration video</a>
 
 </div>
 
