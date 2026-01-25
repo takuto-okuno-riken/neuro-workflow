@@ -90,6 +90,7 @@ class ParameterDefinition:
     constraints: Dict[str, Any] = field(default_factory=dict)
     optimizable: bool = False
     optimization_range: Optional[List[Any]] = None
+    suggested_values: List[Dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass

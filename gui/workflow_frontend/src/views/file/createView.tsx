@@ -16,16 +16,19 @@ import {
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { createAuthHeaders } from '../../api/authHeaders'; // for authentication header
+import { WorkflowContextEditor } from '../../components/WorkflowContextEditor';
 
 interface CreateFlowProjectRequest {
   name: string;
   description: string;
+  workflow_context?: Record<string, any>;
 }
 
 interface CreateFlowProjectResponse {
   id: string;  // UUID is a string
   name: string;
   description: string;
+  workflow_context?: Record<string, any>;
   created_at: string;
   updated_at: string;
   is_active: boolean;
@@ -40,6 +43,9 @@ interface ErrorResponse {
 const CreateFlowPj: React.FC = () => {
   const [projectName, setProjectName] = useState<string>('');
   const [note, setNote] = useState<string>('');
+  const [workflowContext, setWorkflowContext] = useState<Record<string, any> | null>(null);
+  const [isContextValid, setIsContextValid] = useState<boolean>(true);
+  const [contextResetKey, setContextResetKey] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const toast = useToast();
   const navigate = useNavigate();
@@ -83,6 +89,7 @@ const CreateFlowPj: React.FC = () => {
     }
   };
 
+
   const handleRegistration = async () => {
     if (!projectName.trim()) {
       toast({
@@ -99,9 +106,26 @@ const CreateFlowPj: React.FC = () => {
 
     try {
       // Prepare data for API calls
+      let workflowContextPayload: Record<string, any> | undefined = undefined;
+      if (!isContextValid) {
+        toast({
+          title: 'Invalid JSON',
+          description: 'Workflow context must be valid JSON.',
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+        });
+        setIsLoading(false);
+        return;
+      }
+      if (workflowContext && Object.keys(workflowContext).length > 0) {
+        workflowContextPayload = workflowContext;
+      }
+
       const requestData: CreateFlowProjectRequest = {
         name: projectName.trim(),
         description: note.trim() || '', // Default to empty string
+        ...(workflowContextPayload ? { workflow_context: workflowContextPayload } : {}),
       };
 
       const response = await createFlowProject(requestData);
@@ -118,6 +142,9 @@ const CreateFlowPj: React.FC = () => {
       // reset form
       setProjectName('');
       setNote('');
+      setWorkflowContext(null);
+      setIsContextValid(true);
+      setContextResetKey(prev => prev + 1);
 
       // Go to the details screen of the created workflow (using UUID)
       // navigate(`/workflow/${response.id}`);
@@ -158,6 +185,9 @@ const CreateFlowPj: React.FC = () => {
   const handleCancel = () => {
     setProjectName('');
     setNote('');
+    setWorkflowContext(null);
+    setIsContextValid(true);
+    setContextResetKey(prev => prev + 1);
     navigate(-1);
   };
 
@@ -207,6 +237,18 @@ const CreateFlowPj: React.FC = () => {
             _hover={{ borderColor: "blue.300" }}
             _focus={{ borderColor: "blue.500", boxShadow: "0 0 0 1px #3182ce" }}
             resize="vertical"
+          />
+        </FormControl>
+
+        <FormControl>
+          <WorkflowContextEditor
+            key={contextResetKey}
+            label="Workflow Context (Optional)"
+            disabled={isLoading}
+            onChange={(context, rawText, isValid) => {
+              setWorkflowContext(context);
+              setIsContextValid(isValid);
+            }}
           />
         </FormControl>
       </VStack>

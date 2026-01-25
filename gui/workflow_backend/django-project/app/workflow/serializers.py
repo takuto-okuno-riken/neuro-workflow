@@ -20,6 +20,7 @@ class FlowProjectSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "description",
+            "workflow_context",
             "owner",
             "created_at",
             "updated_at",

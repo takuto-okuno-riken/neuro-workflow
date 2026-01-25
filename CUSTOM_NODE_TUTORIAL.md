@@ -8,7 +8,8 @@ This comprehensive tutorial will guide you through creating custom nodes for the
 2. [Prerequisites](#prerequisites)
 3. [Understanding the Node Architecture](#understanding-the-node-architecture)
 4. [Step-by-Step Node Creation](#step-by-step-node-creation)
-5. [Advanced Features](#advanced-features)
+5. [Optional: Suggested Values](#optional-suggested-values)
+6. [Optional: Optimization Metadata](#optional-optimization-metadata)
 6. [Best Practices](#best-practices)
 7. [Testing Your Node](#testing-your-node)
 8. [Integration with Workflows](#integration-with-workflows)
@@ -92,7 +93,103 @@ class MyCustomNode(Node):
     - Processing performed
     - Output produced
     - Dependencies or special requirements
-    """
+"""
+```
+
+### Minimal Example (One Input → One Output)
+
+Use this as the smallest working node:
+
+```python
+from neuroworkflow.core.node import Node
+from neuroworkflow.core.schema import NodeDefinitionSchema, PortDefinition, ParameterDefinition, MethodDefinition
+from neuroworkflow.core.port import PortType
+
+class MultiplyByFactorNode(Node):
+    NODE_DEFINITION = NodeDefinitionSchema(
+        type="multiply_by_factor",
+        description="Multiply a number by a configurable factor",
+        parameters={
+            "factor": ParameterDefinition(
+                default_value=2.0,
+                description="Multiplication factor"
+            )
+        },
+        inputs={
+            "x": PortDefinition(type=PortType.FLOAT, description="Input value")
+        },
+        outputs={
+            "y": PortDefinition(type=PortType.FLOAT, description="Output value")
+        },
+        methods={
+            "compute": MethodDefinition(
+                description="Compute y = x * factor",
+                inputs=["x"],
+                outputs=["y"]
+            )
+        }
+    )
+
+    def __init__(self, name: str):
+        super().__init__(name)
+        self._define_process_steps()
+
+    def _define_process_steps(self):
+        self.add_process_step("compute", self.compute, method_key="compute")
+
+    def compute(self, x: float):
+        return {"y": x * self._parameters["factor"]}
+```
+
+### Minimal Workflow Example
+
+```python
+from neuroworkflow.core.workflow import WorkflowBuilder
+
+node_a = MultiplyByFactorNode("multiply_by_2")
+node_a.configure(factor=2.0)
+
+node_b = MultiplyByFactorNode("multiply_by_3")
+node_b.configure(factor=3.0)
+
+workflow = (
+    WorkflowBuilder("simple_multiply_workflow")
+    .add_node(node_a)
+    .add_node(node_b)
+    .connect("multiply_by_2", "y", "multiply_by_3", "x")
+    .build()
+)
+
+# Provide initial input and run
+node_a.set_input("x", 5.0)
+workflow.execute()
+
+print(node_b.get_output("y"))  # 5 * 2 * 3 = 30
+```
+
+### Workflow Context Example (Optional)
+
+You can define workflow-level context once and it will be injected into all nodes.
+
+```python
+from neuroworkflow.core.workflow import WorkflowBuilder
+
+builder = WorkflowBuilder(
+    "simple_multiply_workflow",
+    context={
+        "species": "human",
+        "metadata_sources": ["literature"],
+        "resource_requirements": {"cpus": 4, "memory_gb": 16}
+    }
+)
+
+workflow = (
+    builder
+    .add_node(node_a)
+    .add_node(node_b)
+    .connect("multiply_by_2", "y", "multiply_by_3", "x")
+    .build()
+)
 ```
 
 ### Step 2: Create the NODE_DEFINITION
@@ -141,15 +238,6 @@ parameters={
         constraints={'min': 1, 'max': 1000}
     ),
 
-    # Optimizable parameter
-    'learning_rate': ParameterDefinition(
-        default_value=0.01,
-        description='Learning rate for adaptation',
-        constraints={'min': 0.001, 'max': 0.1},
-        optimizable=True,
-        optimization_range=[0.001, 0.1]
-    ),
-
     # Choice parameter
     'method': ParameterDefinition(
         default_value='linear',
@@ -157,6 +245,36 @@ parameters={
         constraints={'allowed_values': ['linear', 'nonlinear', 'adaptive']}
     )
 }
+```
+
+## Optional: Suggested Values
+
+If you want AI or metadata suggestions, you can attach them to parameters. These are **hints only** and do not affect execution unless a user selects them.
+
+```python
+'threshold': ParameterDefinition(
+    default_value=0.5,
+    description='Threshold for processing',
+    constraints={'min': 0.0, 'max': 1.0},
+    suggested_values=[
+        {'value': 0.4, 'source': 'literature', 'species': 'human'},
+        {'value': 0.6, 'source': 'allen_brain', 'species': 'mouse'}
+    ]
+)
+```
+
+## Optional: Optimization Metadata
+
+`optimizable` and `optimization_range` are optional metadata for optimization tools. If you are not using optimization, you can ignore them.
+
+```python
+'learning_rate': ParameterDefinition(
+    default_value=0.01,
+    description='Learning rate for adaptation',
+    constraints={'min': 0.001, 'max': 0.1},
+    optimizable=True,
+    optimization_range=[0.001, 0.1]
+)
 ```
 
 ### Step 4: Define Input Ports

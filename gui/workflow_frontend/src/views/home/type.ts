@@ -68,6 +68,7 @@ export interface Project {
   id: string;
   name: string;
   description?: string;
+  workflow_context?: Record<string, any>;
   created_at: string;
   updated_at: string;
 }

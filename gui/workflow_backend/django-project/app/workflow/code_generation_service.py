@@ -1,6 +1,7 @@
 import re
 import os
 import json
+import textwrap
 from pathlib import Path
 from django.conf import settings
 from .models import FlowProject, FlowNode, FlowEdge
@@ -279,6 +280,13 @@ class CodeGenerationService:
 
     def _create_base_template(self, project):
         """Create a basic template (with section comments)"""
+        context_obj = getattr(project, "workflow_context", {}) or {}
+        context_block = json.dumps(context_obj, indent=4)
+        context_block_indented = textwrap.indent(context_block, " " * 8)
+        if context_block_indented.startswith(" " * 8):
+            context_block_indented = context_block_indented[8:]
+        workflow_context_literal = context_block_indented
+        project_name = project.name or "workflow"
         return f'''#!/usr/bin/env python3
 """
 {project.description if project.description else f"Generated workflow for project: {project.name}"}
@@ -296,16 +304,18 @@ def main():
 
     # workflow_builder_import
 
+    # workflow_builder creation
+    workflow_builder = WorkflowBuilder(
+        "{project_name}",
+        context={workflow_context_literal}
+    )
+
     # Create nodes
      
-    # Create workflow field
-    workflow_builder = WorkflowBuilder("neural_simulation")
-    
+    # workflow_builder_ready
+
     # Print workflow information
     print(workflow)
-
-    # Build workflow
-    workflow = workflow_builder.build()
 
     # Execute workflow
     print("\\nExecuting workflow...")
@@ -946,10 +956,10 @@ if __name__ == "__main__":
                     )
 
                     # Delete the existing code in the section and replace it with the new code
-                    # Search to the next section or Create workflow field
+                    # Search to the next section or workflow builder marker
                     next_section_pattern = re.compile(
                         #r'^(\s*)# (Analysis|IO|Network|Optimization|Simulation|Stimulus|Test|Create workflow) field\s*$',
-                        r'^(\s*)# Create workflow field\s*$',
+                        r'^(\s*)# workflow_builder_ready\s*$',
                         re.MULTILINE
                     )
 
@@ -1007,10 +1017,10 @@ if __name__ == "__main__":
                 )
 
                 # Delete the existing code in the section and replace it with the new code
-                # Search to the next section or Create workflow field
+                # Search to the next section or workflow builder marker
                 next_section_pattern = re.compile(
                     #r'^(\s*)# (Analysis|IO|Network|Optimization|Simulation|Stimulus|Test|Create workflow) field\s*$',
-                    r'^(\s*)# Create workflow field\s*$',
+                    r'^(\s*)# workflow_builder_ready\s*$',
                     re.MULTILINE
                 )
 
@@ -1046,9 +1056,9 @@ if __name__ == "__main__":
             for command in workflow_commands:
                 logger.info(f"DEBUG: Command: {command}")
 
-            # Insert the command in the Create workflow field section
+            # Insert the command in the workflow builder marker
             workflow_section_pattern = re.compile(
-                r'^(\s*)workflow_builder = WorkflowBuilder\("neural_simulation"\)\s*$',
+                r'^(\s*)# workflow_builder_ready\s*$',
                 re.MULTILINE,
             )
             match = workflow_section_pattern.search(updated_code)
@@ -1058,7 +1068,7 @@ if __name__ == "__main__":
             if match:
                 insertion_point = match.end()
                 logger.info(
-                    f"DEBUG: Found WorkflowBuilder declaration at position {insertion_point}"
+                    f"DEBUG: Found workflow builder marker at position {insertion_point}"
                 )
 
                 if workflow_commands:
@@ -1073,7 +1083,7 @@ if __name__ == "__main__":
                 else:
                     logger.info(f"DEBUG: No workflow commands to insert")
             else:
-                logger.error(f"DEBUG: Could not find WorkflowBuilder declaration")
+                logger.error(f"DEBUG: Could not find workflow builder marker")
 
             # save to file
             code_file = self.get_code_file_path(project_name)

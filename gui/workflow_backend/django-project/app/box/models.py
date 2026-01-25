@@ -207,5 +207,11 @@ class PythonFile(models.Model):
             "dict": "dict",
             "object": "object",
             "any": "any",
+            "file_path": "file_path",
+            "csv_file": "csv_file",
+            "json_file": "json_file",
+            "pickle_file": "pickle_file",
+            "numpy_file": "numpy_file",
+            "hdf5_file": "hdf5_file",
         }
         return type_mapping.get(str(port_type).lower(), "any")

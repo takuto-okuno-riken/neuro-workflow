@@ -750,6 +750,14 @@ const HomeView = () => {
     onDeleteOpen();
   }, [onDeleteOpen]);
 
+  const handleProjectUpdate = useCallback((projectId: string, workflowContext: Record<string, any>) => {
+    setProjects(prevProjects =>
+      prevProjects.map(project =>
+        project.id === projectId ? { ...project, workflow_context: workflowContext } : project
+      )
+    );
+  }, []);
+
   // Executing project deletion
   const handleProjectDelete = useCallback(async () => {
     if (!projectToDelete) return;
@@ -1958,6 +1966,7 @@ const HomeView = () => {
           selectedProject={selectedProject}
           onProjectChange={handleProjectChange}
           onProjectDelete={handleProjectDeleteStart}
+          onProjectUpdate={handleProjectUpdate}
           autoSaveEnabled={autoSaveEnabled}
           isConnected={isConnected}
         />

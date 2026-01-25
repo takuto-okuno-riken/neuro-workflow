@@ -134,6 +134,9 @@ export const TabManager: React.FC = () => {
                 >
                   <Routes>
                     <Route path="/" element={<HomeView />} />
+                    <Route path="/file" element={<FileListView />} />
+                    <Route path="/file/new" element={<CreateFlowPj />} />
+                    <Route path="/box/upload" element={<BoxUpload />} />
                     <Route path="/*" element={<NotFoundView />} />
                   </Routes>
                 </Box>
