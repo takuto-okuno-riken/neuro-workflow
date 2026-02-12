@@ -111,6 +111,7 @@ const HomeView = () => {
   const [isConnected, setIsConnected] = useState<boolean>(true);
   const [autoSaveEnabled, setAutoSaveEnabled] = useState<boolean>(true);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const updateNodeAPIRef = useRef<(nodeId: string, nodeData: Partial<Node<CalculationNodeData>>) => Promise<void>>();
 
   // Node menu related status
   const [nodeMenuPosition, setNodeMenuPosition] = useState<{ x: number, y: number } | null>(null);
@@ -274,37 +275,14 @@ const HomeView = () => {
       return prevNode;
     });
 
-    // Persist to backend via API
-    // Note: Read projectId from localStorage to avoid stale closure
-    // (selectedProject is null at the time this callback is first created)
-    if (!autoSaveEnabled) return;
+    // Persist to backend via API (use ref to avoid stale closure over selectedProject)
     debouncedSave(async () => {
-      const projectId = localStorage.getItem(PROJECT_ID_KEY);
-      if (!projectId) return;
-
       const updatedNode = useFlowStore.getState().sharedNodes.find(n => n.id === nodeId);
-      if (!updatedNode) return;
-
-      try {
-        const headers = await createAuthHeaders();
-        const response = await fetch(`/api/workflow/${projectId}/nodes/${nodeId}/`, {
-          method: 'PUT',
-          credentials: 'include',
-          headers: { ...headers, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            position: updatedNode.position,
-            type: updatedNode.type,
-            data: updatedNode.data,
-          }),
-        });
-        if (!response.ok) {
-          console.error('Failed to persist node update');
-        }
-      } catch (error) {
-        console.error('Error persisting node update:', error);
+      if (updatedNode) {
+        await updateNodeAPIRef.current?.(nodeId, updatedNode);
       }
     });
-  }, [setSharedNodes, debouncedSave, autoSaveEnabled]);
+  }, [setSharedNodes, debouncedSave]);
 
   // The handleSyncWorkflowNodes function has been removed. - Sidebar and workflow nodes are treated independently
 
@@ -589,6 +567,7 @@ const HomeView = () => {
       });
     }
   };
+  updateNodeAPIRef.current = updateNodeAPI;
 
   // Deleting nodes individually
   const deleteNodeAPI = async (nodeId: string) => {
