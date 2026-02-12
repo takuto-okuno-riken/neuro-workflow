@@ -18,7 +18,7 @@ import {
   AlertDialogFooter,
   Tooltip, Icon } from "@chakra-ui/react";
 import { useRef } from 'react';
-import { ViewIcon, InfoIcon, DeleteIcon, ChevronDownIcon, ChevronUpIcon } from "@chakra-ui/icons";
+import { InfoIcon, DeleteIcon, ChevronDownIcon, ChevronUpIcon } from "@chakra-ui/icons";
 import { FiCode } from "react-icons/fi";
 import { useTabContext } from '../../../components/tabs/TabManager';
 import { createAuthHeaders } from '../../../api/authHeaders';
