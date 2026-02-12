@@ -275,7 +275,7 @@ const HomeView = () => {
       return prevNode;
     });
 
-    // Persist to backend via API (use ref to avoid stale closure over selectedProject)
+    // Persist to backend via API (ref always points to the latest updateNodeAPI)
     debouncedSave(async () => {
       const updatedNode = useFlowStore.getState().sharedNodes.find(n => n.id === nodeId);
       if (updatedNode) {
