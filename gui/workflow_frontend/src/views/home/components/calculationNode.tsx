@@ -27,6 +27,7 @@ interface NodeCallbacks {
   onJupyter?: (nodeId: string) => void;
   onInfo?: (nodeId: string) => void;
   onDelete?: (nodeId: string) => void;
+  onNodeUpdate?: (nodeId: string, updatedData: Partial<CalculationNodeData>) => void;
 }
 
 export const CalculationNode = ({ 
@@ -78,7 +79,7 @@ export const CalculationNode = ({
   ];
 
   // Input/output parameter expansion/contraction management
-  const [isParamExpand, setIsParamExpand] = useState<boolean>(true);
+  const [isParamExpand, setIsParamExpand] = useState<boolean>(data.isParamExpand ?? true);
   const updateNodeInternals = useUpdateNodeInternals();
   //const isParamExpand = data.isParamExpand || false;
 
@@ -264,7 +265,9 @@ export const CalculationNode = ({
               icon={isParamExpand ? <ChevronUpIcon boxSize={2.5} /> : <ChevronDownIcon boxSize={2.5} />}
               onClick={(e) => {
                 e.stopPropagation();
-                setIsParamExpand(!isParamExpand);
+                const newVal = !isParamExpand;
+                setIsParamExpand(newVal);
+                callbacks.onNodeUpdate?.(id, { isParamExpand: newVal });
               }}
               _hover={{ bg: "gray.500", transform: "scale(1.1)" }}
               minW="18px"

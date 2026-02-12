@@ -228,6 +228,17 @@ const HomeView = () => {
     }
   }, [sharedNodes, onViewOpen]);
 
+  // Debounced Storage Function
+  const debouncedSave = useCallback((action: () => Promise<void>) => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(async () => {
+      await action();
+    }, 500);
+  }, []);
+
   const handleNodeUpdate = useCallback((nodeId: string, updatedData: Partial<CalculationNodeData>) => {
     console.log('handleNodeUpdate called for node:', nodeId, 'with data:', updatedData);
     
@@ -253,8 +264,8 @@ const HomeView = () => {
     // selectedNode also updated
     setSelectedNode((prevNode) => {
       if (prevNode?.id === nodeId) {
-        const updatedSelectedNode = { 
-          ...prevNode, 
+        const updatedSelectedNode = {
+          ...prevNode,
           data: { ...prevNode.data, ...updatedData }
         };
         console.log('Selected node updated:', updatedSelectedNode);
@@ -262,7 +273,37 @@ const HomeView = () => {
       }
       return prevNode;
     });
-  }, [setSharedNodes]);
+
+    // Persist to backend via API
+    // Note: Read projectId from localStorage to avoid stale closure
+    // (updateNodeAPI captures selectedProject from initial render where it's null)
+    debouncedSave(async () => {
+      const projectId = localStorage.getItem(PROJECT_ID_KEY);
+      if (!projectId) return;
+
+      const updatedNode = useFlowStore.getState().sharedNodes.find(n => n.id === nodeId);
+      if (!updatedNode) return;
+
+      try {
+        const headers = await createAuthHeaders();
+        const response = await fetch(`/api/workflow/${projectId}/nodes/${nodeId}/`, {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            position: updatedNode.position,
+            type: updatedNode.type,
+            data: updatedNode.data,
+          }),
+        });
+        if (!response.ok) {
+          console.error('Failed to persist node update');
+        }
+      } catch (error) {
+        console.error('Error persisting node update:', error);
+      }
+    });
+  }, [setSharedNodes, debouncedSave]);
 
   // The handleSyncWorkflowNodes function has been removed. - Sidebar and workflow nodes are treated independently
 
@@ -374,6 +415,7 @@ const HomeView = () => {
         onJupyter={handleNodeJupyter}
         onInfo={handleNodeInfo}
         onDelete={handleNodeDelete}
+        onNodeUpdate={handleNodeUpdate}
       />
     );
 
@@ -402,7 +444,7 @@ const HomeView = () => {
     });
 
     return types;
-  }, [handleNodeJupyter, handleNodeInfo, handleNodeDelete, uploadedNodes]);
+  }, [handleNodeJupyter, handleNodeInfo, handleNodeDelete, handleNodeUpdate, uploadedNodes]);
 
 
   // Helper functions for API communication
@@ -694,16 +736,7 @@ const HomeView = () => {
     }
   };
 
-  // Debounced Storage Function
-  const debouncedSave = useCallback((action: () => Promise<void>) => {
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-    
-    saveTimeoutRef.current = setTimeout(async () => {
-      await action();
-    }, 500);
-  }, []);
+
 
   // Get project list
   useEffect(() => {

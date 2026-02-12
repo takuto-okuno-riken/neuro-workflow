@@ -8,7 +8,9 @@ __pycache__/
 env/
 venv/
 ENV/
-*.sqlite3
+.settings
 
 # Database files
 *.db
+*.sqlite3
+
