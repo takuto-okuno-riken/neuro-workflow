@@ -276,7 +276,8 @@ const HomeView = () => {
 
     // Persist to backend via API
     // Note: Read projectId from localStorage to avoid stale closure
-    // (updateNodeAPI captures selectedProject from initial render where it's null)
+    // (selectedProject is null at the time this callback is first created)
+    if (!autoSaveEnabled) return;
     debouncedSave(async () => {
       const projectId = localStorage.getItem(PROJECT_ID_KEY);
       if (!projectId) return;
@@ -303,7 +304,7 @@ const HomeView = () => {
         console.error('Error persisting node update:', error);
       }
     });
-  }, [setSharedNodes, debouncedSave]);
+  }, [setSharedNodes, debouncedSave, autoSaveEnabled]);
 
   // The handleSyncWorkflowNodes function has been removed. - Sidebar and workflow nodes are treated independently
 
